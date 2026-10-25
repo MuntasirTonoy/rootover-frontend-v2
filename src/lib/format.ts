@@ -1,0 +1,58 @@
+export const DAY_MS = 24 * 60 * 60 * 1000;
+
+export function formatBDT(amount: number): string {
+  const sign = amount < 0 ? "-" : "";
+  return `${sign}৳${Math.round(Math.abs(amount)).toLocaleString("en-US")}`;
+}
+
+export function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Dhaka",
+  });
+}
+
+export function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Dhaka",
+  });
+}
+
+export function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+// Keeps the first 3 and last `visible` characters, e.g. 017•••••123
+export function maskNumber(value: string, visible = 3): string {
+  const clean = value.replace(/\s|-/g, "");
+  if (clean.length <= visible + 3) return clean;
+  return `${clean.slice(0, 3)}${"•".repeat(clean.length - visible - 3)}${clean.slice(-visible)}`;
+}
+
+export function uid(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
+export function trxId(): string {
+  return `DEMO${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+}
+
+export function initials(name: string): string {
+  return name
+    .replace(/^(Dr\.|Md\.|Mr\.|Ms\.)\s*/i, "")
+    .split(/\s+/)
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
