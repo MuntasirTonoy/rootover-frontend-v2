@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import CurriculumSidebar from "@/components/course/CurriculumSidebar";
+import ReportVideoButton from "@/components/course/ReportVideoButton";
 import LoadingAnimation from "@/components/LoadingAnimation";
 import { Avatar, EmptyBlock } from "@/components/ui/primitives";
 import { useApp } from "@/context/AppStore";
@@ -172,13 +173,21 @@ function Player({ params }: LearnPageProps) {
             <ArrowLeft size={18} />
           </Link>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-bold text-foreground">{course.title}</h1>
-            {teacher && (
-              <Link href={`/teachers/${teacher.id}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary">
-                <Avatar name={teacher.name} src={teacher.avatar} size="w-4 h-4 text-[8px]" />
-                {teacher.name}
-              </Link>
-            )}
+            <h1 className="truncate text-sm sm:text-base font-bold text-foreground">{course.title}</h1>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              {teacher && (
+                <Link href={`/teachers/${teacher.id}`} className="flex min-w-0 items-center gap-1.5 hover:text-primary">
+                  <Avatar name={teacher.name} src={teacher.avatar} size="w-4 h-4 text-[8px]" />
+                  <span className="truncate">{teacher.name}</span>
+                </Link>
+              )}
+              {/* Progress moves here on phones; the header has no room for it */}
+              {enrollment && (
+                <span className="sm:hidden shrink-0">
+                  · <b className="text-foreground">{progress.percent}%</b>
+                </span>
+              )}
+            </div>
           </div>
           {enrollment && (
             <p className="hidden sm:block shrink-0 text-xs text-muted-foreground">
@@ -205,9 +214,10 @@ function Player({ params }: LearnPageProps) {
       </div>
 
       <div className="flex flex-1">
-        <main className="min-w-0 flex-1 p-4 lg:p-6">
+        <main className="min-w-0 flex-1 sm:p-4 lg:p-6">
           <div className={`mx-auto ${sidebarOpen ? "max-w-5xl" : "max-w-6xl"}`}>
-            <div className="aspect-video w-full overflow-hidden rounded-lg bg-black shadow-lg">
+            {/* Edge-to-edge on phones, rounded card from sm up */}
+            <div className="aspect-video w-full overflow-hidden bg-black sm:rounded-lg sm:shadow-lg">
               {lesson && watchable ? (
                 <iframe
                   key={lesson.id}
@@ -218,14 +228,14 @@ function Player({ params }: LearnPageProps) {
                   allowFullScreen
                 />
               ) : (
-                <div className="flex h-full flex-col items-center justify-center p-6 text-center text-white">
-                  <Lock size={36} className="mb-3 opacity-80" />
-                  <h2 className="text-xl font-bold">This lesson is locked</h2>
-                  <p className="mt-1 mb-4 max-w-md text-sm text-white/70">
-                    Buy the full course to watch every chapter and lesson.
+                <div className="flex h-full flex-col items-center justify-center p-4 sm:p-6 text-center text-white">
+                  <Lock className="mb-2 sm:mb-3 h-7 w-7 sm:h-9 sm:w-9 opacity-80" />
+                  <h2 className="text-base sm:text-xl font-bold">This lesson is locked</h2>
+                  <p className="mt-1 mb-3 sm:mb-4 max-w-md text-xs sm:text-sm text-white/70">
+                    Buy the full course to watch every lesson.
                   </p>
                   {canBuy && (
-                    <Link href={`/checkout?courseId=${course.id}`} className={btn.primary}>
+                    <Link href={`/checkout?courseId=${course.id}`} className={`${btn.primary} py-2 text-xs sm:py-2.5 sm:text-sm`}>
                       Enroll for {formatBDT(coursePrice(course))}
                     </Link>
                   )}
@@ -234,13 +244,14 @@ function Player({ params }: LearnPageProps) {
             </div>
 
             {lesson && current && (
-              <div className="mt-5">
+              <div className="mt-4 sm:mt-5 px-4 sm:px-0">
                 <p className="text-xs font-semibold uppercase tracking-wide text-primary">
                   Chapter {current.chapterIndex + 1}: {current.chapterTitle}
                 </p>
-                <div className="mt-1 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <h2 className="text-xl md:text-2xl font-extrabold text-foreground">{lesson.title}</h2>
+                {/* Title and actions side by side only when there's room (lg) */}
+                <div className="mt-1 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <h2 className="text-lg sm:text-xl lg:text-2xl font-extrabold text-foreground">{lesson.title}</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {formatDuration(lesson.durationMin)}
                       {isDone && <span className="ml-2 font-semibold text-green-600">· Completed</span>}
@@ -249,15 +260,32 @@ function Player({ params }: LearnPageProps) {
                   </div>
                   {/* Saving and progress tracking are learner features */}
                   {watchable && (!user || user.role === "student") && (
-                    <div className="flex flex-wrap gap-2">
-                      <button onClick={handleSave} className={isSaved ? btn.primary : btn.secondary} aria-pressed={isSaved}>
+                    // Equal-width row on phones/tablets so the buttons never wrap unevenly
+                    <div className="grid auto-cols-fr grid-flow-col gap-2 lg:flex lg:shrink-0">
+                      {user?.role === "student" && (
+                        <ReportVideoButton
+                          courseId={course.id}
+                          lessonId={lesson.id}
+                          lessonTitle={lesson.title}
+                          className="w-full max-sm:px-2!"
+                        />
+                      )}
+                      <button
+                        onClick={handleSave}
+                        className={`${isSaved ? btn.primary : btn.secondary} w-full max-sm:px-2!`}
+                        aria-pressed={isSaved}
+                      >
                         <Bookmark size={16} className={isSaved ? "fill-current" : ""} />
                         {isSaved ? "Saved" : "Save"}
                       </button>
                       {enrollment && (
-                        <button onClick={handleComplete} className={isDone ? btn.secondary : btn.primary} aria-pressed={isDone}>
+                        <button
+                          onClick={handleComplete}
+                          className={`${isDone ? btn.secondary : btn.primary} w-full max-sm:px-2!`}
+                          aria-pressed={isDone}
+                        >
                           {isDone ? <CheckCircle2 size={16} className="text-green-600" /> : <Circle size={16} />}
-                          {isDone ? "Completed" : "Mark complete"}
+                          {isDone ? "Done" : <><span className="sm:hidden">Complete</span><span className="hidden sm:inline">Mark complete</span></>}
                         </button>
                       )}
                     </div>
@@ -286,6 +314,14 @@ function Player({ params }: LearnPageProps) {
                     </Link>
                   </div>
                 )}
+
+                {/* Phones and tablets have no side panel, so list the course content inline too */}
+                <section className="lg:hidden mt-6 mb-6 overflow-hidden rounded-lg border border-border bg-card">
+                  <p className="border-b border-border px-4 py-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                    Course content
+                  </p>
+                  {sidebar}
+                </section>
               </div>
             )}
           </div>

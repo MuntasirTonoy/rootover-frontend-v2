@@ -199,6 +199,46 @@ export interface Withdrawal {
   note?: string;
 }
 
+export const REPORT_REASONS = [
+  "VIDEO_ISSUE",
+  "AUDIO_ISSUE",
+  "WRONG_CONTENT",
+  "INAPPROPRIATE_CONTENT",
+  "BROKEN_LINK",
+  "OTHER",
+] as const;
+export type ReportReason = (typeof REPORT_REASONS)[number];
+
+// open → fix_submitted → resolved, or → fix_rejected → fix_submitted → ...
+export type ReportStatus = "open" | "fix_submitted" | "fix_rejected" | "resolved";
+
+export interface VideoReportEvent {
+  id: string;
+  type: "reported" | "fix_submitted" | "fix_approved" | "fix_rejected";
+  actorName: string;
+  actorRole: Role | "system";
+  note?: string;
+  at: string;
+}
+
+export interface VideoReport {
+  id: string;
+  lessonId: string;
+  courseId: string;
+  teacherId: string;
+  reporterId: string;
+  reason: ReportReason;
+  description?: string;
+  status: ReportStatus;
+  teacherNote?: string;
+  adminNote?: string;
+  fixSubmittedAt?: string;
+  resolvedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  events: VideoReportEvent[];
+}
+
 export interface ActivityLog {
   id: string;
   actorName: string;
@@ -220,6 +260,7 @@ export interface DemoDB {
   enrollments: Enrollment[];
   savedLessons: SavedLesson[];
   withdrawals: Withdrawal[];
+  videoReports: VideoReport[];
   activityLogs: ActivityLog[];
 }
 

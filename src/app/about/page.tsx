@@ -11,7 +11,7 @@ import {
   Twitter,
   Youtube,
 } from "@/components/BrandIcons";
-import { about as aboutConfig, contact as contactConfig, socialLinks } from "@/lib/site-config";
+import { about as aboutConfig, contact as contactConfig, founders, socialLinks } from "@/lib/site-config";
 
 const socialStyles: { match: string; icon: ReactNode; color: string }[] = [
   { match: "facebook", icon: <Facebook size={18} />, color: "text-blue-600 bg-blue-500/10" },
@@ -199,6 +199,39 @@ export default function AboutPage() {
           </div>
         </div>
       </div>
+
+      {/* Founders */}
+      <section className="container-custom mt-16 md:mt-24">
+        <div className="mb-8 md:mb-10 text-center">
+          <p className="mb-2 text-xs font-bold uppercase tracking-widest text-primary">The people behind Root Over</p>
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-foreground">Founders</h2>
+        </div>
+        <div className="mx-auto grid max-w-3xl grid-cols-1 sm:grid-cols-2 gap-6 md:gap-8">
+          {founders.map((founder, i) => (
+            <motion.figure
+              key={founder.name}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: i * 0.1 }}
+              className="group overflow-hidden rounded-2xl border border-border bg-surface"
+            >
+              <div className="aspect-[4/5] overflow-hidden bg-card">
+                <img
+                  src={founder.photo}
+                  alt={founder.name}
+                  loading="lazy"
+                  className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
+                />
+              </div>
+              <figcaption className="p-5 text-center">
+                <p className="text-lg font-bold text-foreground">{founder.name}</p>
+                <p className="mt-0.5 text-sm font-medium text-primary">{founder.role}</p>
+              </figcaption>
+            </motion.figure>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

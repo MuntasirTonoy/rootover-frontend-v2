@@ -19,10 +19,12 @@ import type {
   TeacherApplication,
   TeacherProfile,
   User,
+  VideoReport,
   Withdrawal,
 } from "./types";
 
-export const DB_VERSION = 1;
+// Bump when the DemoDB shape changes; stored browser data with an older version is discarded
+export const DB_VERSION = 2;
 
 const SEED_NOW = new Date("2026-10-24T10:00:00+06:00").getTime();
 const DAY = 24 * 60 * 60 * 1000;
@@ -646,6 +648,71 @@ teachers.forEach((t, i) => {
   }
 });
 
+// ---------------------------------------------------------------- video reports
+
+const teacherName: Record<string, string> = Object.fromEntries(teachers.map((t, i) => [t.id, teacherUsers[i].name]));
+const studentName = (id: string) => studentUsers.find((u) => u.id === id)!.name;
+
+// One report per status so the teacher and admin screens have something to act on
+const videoReports: VideoReport[] = (
+  [
+    { lessonId: "c-ssc-physics-ch2-l2", reporterId: "u-s1", reason: "AUDIO_ISSUE", status: "open", reported: 1 },
+    {
+      lessonId: "c-ssc-physics-ch1-l2", reporterId: "u-s1", reason: "VIDEO_ISSUE", status: "fix_submitted", reported: 6,
+      fix: [2, "Re-uploaded the video in 1080p and replaced the link."],
+    },
+    {
+      lessonId: "c-hsc-physics-ch1-l1", reporterId: "u-s7", reason: "BROKEN_LINK", status: "fix_rejected", reported: 9,
+      fix: [6, "Changed the video to public."],
+      reject: [5, "The video is still private. Set it to Unlisted and update the lesson link."],
+    },
+    {
+      lessonId: "c-bsc-calculus-ch1-l1", reporterId: "u-s6", reason: "WRONG_CONTENT", status: "resolved", reported: 30,
+      fix: [27, "Replaced the video with the correct lecture on intuitive limits."],
+      approve: [25, "Verified, the correct video is now linked."],
+    },
+    {
+      lessonId: "c-hsc-chemistry-ch1-l1", reporterId: "u-s9", reason: "OTHER", status: "open", reported: 3,
+      description: "The slides in the second half of the video are cut off and can't be read.",
+    },
+  ] as {
+    lessonId: string;
+    reporterId: string;
+    reason: VideoReport["reason"];
+    status: VideoReport["status"];
+    reported: number;
+    description?: string;
+    fix?: [number, string];
+    reject?: [number, string];
+    approve?: [number, string];
+  }[]
+).map((r, i) => {
+  const course = courses.find((c) => r.lessonId.startsWith(c.id))!;
+  const events: VideoReport["events"] = [
+    { id: `vre-${i}-1`, type: "reported", actorName: studentName(r.reporterId), actorRole: "student", note: r.description, at: daysAgo(r.reported) },
+  ];
+  if (r.fix) events.push({ id: `vre-${i}-2`, type: "fix_submitted", actorName: teacherName[course.teacherId], actorRole: "teacher", note: r.fix[1], at: daysAgo(r.fix[0]) });
+  if (r.reject) events.push({ id: `vre-${i}-3`, type: "fix_rejected", actorName: "Platform Admin", actorRole: "admin", note: r.reject[1], at: daysAgo(r.reject[0]) });
+  if (r.approve) events.push({ id: `vre-${i}-3`, type: "fix_approved", actorName: "Platform Admin", actorRole: "admin", note: r.approve[1], at: daysAgo(r.approve[0]) });
+  return {
+    id: `vr-${i + 1}`,
+    lessonId: r.lessonId,
+    courseId: course.id,
+    teacherId: course.teacherId,
+    reporterId: r.reporterId,
+    reason: r.reason,
+    description: r.description,
+    status: r.status,
+    teacherNote: r.fix?.[1],
+    adminNote: r.reject?.[1] ?? r.approve?.[1],
+    fixSubmittedAt: r.fix ? daysAgo(r.fix[0]) : undefined,
+    resolvedAt: r.approve ? daysAgo(r.approve[0]) : undefined,
+    createdAt: daysAgo(r.reported),
+    updatedAt: events[events.length - 1].at,
+    events,
+  };
+});
+
 // ---------------------------------------------------------------- activity log
 
 const activityLogs: ActivityLog[] = (
@@ -684,6 +751,7 @@ export function createSeedDB(): DemoDB {
     enrollments,
     savedLessons,
     withdrawals,
+    videoReports,
     activityLogs: activityLogs.sort((a, b) => b.at.localeCompare(a.at)),
   });
 }

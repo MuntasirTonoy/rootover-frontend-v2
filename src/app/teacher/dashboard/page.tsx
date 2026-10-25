@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { BadgeCheck, BookOpen, Coins, Hourglass, Plus, Receipt, Users, Wallet } from "lucide-react";
+import ReportsAlert from "@/components/dashboard/ReportsAlert";
 import DataTable from "@/components/ui/DataTable";
+import { reportCounts } from "@/lib/reports";
 import SalesChart from "@/components/ui/SalesChart";
 import { Avatar, PageHeader, Section, StatCard, Stars, StatusBadge, courseStatusLabel } from "@/components/ui/primitives";
 import { formatBDT, formatDate } from "@/lib/format";
@@ -43,6 +45,12 @@ export default function TeacherDashboard() {
             <Plus size={16} /> New course
           </Link>
         }
+      />
+
+      <ReportsAlert
+        count={reportCounts(db.videoReports.filter((r) => r.teacherId === teacher.id)).needsFix}
+        href="/teacher/reports"
+        text="reported video(s) need your fix"
       />
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">

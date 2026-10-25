@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { BookOpen, ClipboardCheck, Coins, GraduationCap, Receipt, RotateCcw, Users, Wallet } from "lucide-react";
+import ReportsAlert from "@/components/dashboard/ReportsAlert";
 import SalesChart from "@/components/ui/SalesChart";
+import { reportCounts } from "@/lib/reports";
 import { PageHeader, Section, StatCard, StatusBadge } from "@/components/ui/primitives";
 import { useApp } from "@/context/AppStore";
 import { confirmAction } from "@/lib/confirm";
@@ -34,6 +36,12 @@ export default function AdminDashboard() {
             <RotateCcw size={16} /> Reset demo data
           </button>
         }
+      />
+
+      <ReportsAlert
+        count={reportCounts(db.videoReports).awaitingApproval}
+        href="/admin/video-reports"
+        text="video fix(es) waiting for your approval"
       />
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">

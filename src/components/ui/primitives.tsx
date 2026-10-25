@@ -41,6 +41,11 @@ const statusStyles: Record<string, [Tone, string]> = {
   under_verification: ["purple", "Under Verification"],
   inactive: ["gray", "Inactive"],
   expired: ["red", "Expired"],
+  // Video reports
+  open: ["amber", "Open"],
+  fix_submitted: ["blue", "Fix Submitted"],
+  fix_rejected: ["red", "Fix Rejected"],
+  resolved: ["green", "Resolved"],
 };
 
 export function StatusBadge({ status, label }: { status: string; label?: string }) {

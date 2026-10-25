@@ -21,9 +21,12 @@ import { trxId, uid } from "@/lib/format";
 import {
   catalogCourses,
   enrollmentFor,
+  findLesson,
   getTeacherByUser,
+  lessonAccess,
   teacherFinance,
 } from "@/lib/selectors";
+import { isActiveReport, reportContext } from "@/lib/reports";
 import type {
   ApplicationStatus,
   Coupon,
@@ -32,11 +35,13 @@ import type {
   DemoDB,
   PaymentMethod,
   Purchase,
+  ReportReason,
   Role,
   TeacherApplication,
   TeacherProfile,
   User,
   UserStatus,
+  VideoReport,
   WithdrawalStatus,
 } from "@/lib/types";
 
@@ -82,6 +87,9 @@ interface AppContextValue {
   setCourseStatus: (courseId: string, status: CourseStatus, note?: string) => void;
   setUserStatus: (userId: string, status: UserStatus) => void;
   processWithdrawal: (id: string, status: Exclude<WithdrawalStatus, "pending">, note?: string) => void;
+  reportVideo: (input: { courseId: string; lessonId: string; reason: ReportReason; description?: string }) => void;
+  submitReportFix: (reportId: string, note: string) => void;
+  reviewReportFix: (reportId: string, decision: "approve" | "reject", note?: string) => void;
   resetDemo: () => void;
 }
 
@@ -514,6 +522,103 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
   };
 
+  const reportVideo: AppContextValue["reportVideo"] = ({ courseId, lessonId, reason, description }) => {
+    const current = requireUser();
+    if (current.role !== "student") throw new Error("Only students can report videos.");
+    const d0 = dbRef.current;
+    const course = d0.courses.find((c) => c.id === courseId);
+    const found = course && findLesson(course, lessonId);
+    if (!course || !found || !lessonAccess(d0, course, current).canWatch(found.lesson))
+      throw new Error("You can only report lessons you can watch.");
+    if (d0.videoReports.some((r) => r.reporterId === current.id && r.lessonId === lessonId && isActiveReport(r)))
+      throw new Error("You've already reported this video. We'll update you when it's fixed.");
+    const text = description?.trim();
+    if (reason === "OTHER" && !text) throw new Error("Please describe the problem.");
+    const now = new Date().toISOString();
+    mutate(
+      (d) =>
+        d.videoReports.unshift({
+          id: uid("vr"),
+          lessonId,
+          courseId,
+          teacherId: course.teacherId,
+          reporterId: current.id,
+          reason,
+          description: text || undefined,
+          status: "open",
+          createdAt: now,
+          updatedAt: now,
+          events: [{ id: uid("vre"), type: "reported", actorName: current.name, actorRole: current.role, note: text || undefined, at: now }],
+        }),
+      { action: "Reported a video", target: `${course.title} · ${found.lesson.title}` },
+    );
+  };
+
+  // Shared by the fix/review actions: validates the transition and appends history
+  const transitionReport = (
+    reportId: string,
+    allowedFrom: VideoReport["status"][],
+    apply: (r: VideoReport, now: string) => void,
+    event: VideoReport["events"][number]["type"],
+    note: string | undefined,
+    action: string,
+  ) => {
+    const current = requireUser();
+    const report = dbRef.current.videoReports.find((r) => r.id === reportId);
+    if (!report) throw new Error("Report not found.");
+    if (!allowedFrom.includes(report.status)) throw new Error("This report can't be updated from its current status.");
+    const { course, lesson } = reportContext(dbRef.current, report);
+    mutate(
+      (d) => {
+        const target = d.videoReports.find((r) => r.id === reportId)!;
+        const now = new Date().toISOString();
+        apply(target, now);
+        target.updatedAt = now;
+        target.events.push({ id: uid("vre"), type: event, actorName: current.name, actorRole: current.role, note, at: now });
+      },
+      { action, target: `${course?.title ?? "Course"} · ${lesson?.title ?? "Lesson"}` },
+    );
+  };
+
+  const submitReportFix = (reportId: string, note: string) => {
+    const current = requireUser();
+    const report = dbRef.current.videoReports.find((r) => r.id === reportId);
+    if (!report || getTeacherByUser(dbRef.current, current.id)?.id !== report.teacherId)
+      throw new Error("Only the course's teacher can fix this report.");
+    const text = note.trim();
+    if (text.length < 5) throw new Error("Describe what you fixed.");
+    transitionReport(
+      reportId,
+      ["open", "fix_rejected"],
+      (r, now) => {
+        r.status = "fix_submitted";
+        r.teacherNote = text;
+        r.fixSubmittedAt = now;
+      },
+      "fix_submitted",
+      text,
+      "Submitted a video fix",
+    );
+  };
+
+  const reviewReportFix: AppContextValue["reviewReportFix"] = (reportId, decision, note) => {
+    if (requireUser().role !== "admin") throw new Error("Only admins can review fixes.");
+    const text = note?.trim() || undefined;
+    if (decision === "reject" && (!text || text.length < 5)) throw new Error("Explain why the fix was rejected.");
+    transitionReport(
+      reportId,
+      ["fix_submitted"],
+      (r, now) => {
+        r.status = decision === "approve" ? "resolved" : "fix_rejected";
+        r.adminNote = text;
+        if (decision === "approve") r.resolvedAt = now;
+      },
+      decision === "approve" ? "fix_approved" : "fix_rejected",
+      text,
+      decision === "approve" ? "Approved a video fix" : "Rejected a video fix",
+    );
+  };
+
   const resetDemo = () => {
     setDb(createSeedDB());
     toast.success("Demo data has been reset.");
@@ -546,6 +651,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCourseStatus,
         setUserStatus,
         processWithdrawal,
+        reportVideo,
+        submitReportFix,
+        reviewReportFix,
         resetDemo,
       }}
     >

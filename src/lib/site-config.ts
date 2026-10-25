@@ -25,6 +25,15 @@ export const contact = {
   address: "Bangladesh",
 };
 
+export const founders = [
+  { name: "Muntasir Tonoy", role: "Co-Founder", photo: "https://i.ibb.co.com/KJrpYgY/prof-headshot.jpg" },
+  {
+    name: "Ranok Raihan",
+    role: "Co-Founder",
+    photo: "https://i.ibb.co.com/BKyLTXXy/821523280-4609476899371154-8111223887945179363-n.jpg",
+  },
+];
+
 export const socialLinks: SocialLink[] = [
   { label: "Facebook", url: "https://facebook.com" },
   { label: "YouTube", url: "https://youtube.com" },

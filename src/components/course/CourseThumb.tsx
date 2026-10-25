@@ -1,14 +1,5 @@
-import { Atom, BookOpen, Briefcase, Code2, FlaskConical, GraduationCap, type LucideIcon } from "lucide-react";
-import type { Course, Level } from "@/lib/types";
-
-const levelStyle: Record<Level, { bg: string; icon: LucideIcon }> = {
-  SSC: { bg: "bg-emerald-600", icon: Atom },
-  HSC: { bg: "bg-sky-600", icon: FlaskConical },
-  BSc: { bg: "bg-indigo-600", icon: GraduationCap },
-  BBA: { bg: "bg-amber-600", icon: Briefcase },
-  BA: { bg: "bg-rose-600", icon: BookOpen },
-  Others: { bg: "bg-zinc-700", icon: Code2 },
-};
+import { levelMeta } from "@/lib/levels";
+import type { Course } from "@/lib/types";
 
 // Uses the uploaded thumbnail, or a generated tile coloured by level
 export default function CourseThumb({
@@ -31,7 +22,7 @@ export default function CourseThumb({
       />
     );
   }
-  const { bg, icon: Icon } = levelStyle[course.level];
+  const { bg, icon: Icon } = levelMeta[course.level];
   return (
     <div
       role="img"

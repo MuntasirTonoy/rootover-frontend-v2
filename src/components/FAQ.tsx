@@ -36,23 +36,23 @@ export default function FAQSection() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   return (
-    <section className="py-20 md:py-28 bg-surface overflow-hidden">
+    <section className="py-14 md:py-20 bg-surface overflow-hidden">
       {/* Width Control */}
-      <div className="max-w-6xl mx-auto px-6  lg:px-8">
+      <div className="container-custom">
         {/* 6 Column Layout (Desktop) */}
-        <div className="flex flex-col lg:flex-row gap-12 lg:gap-16 items-start">
+        <div className="flex flex-col lg:flex-row gap-8 lg:gap-16 items-start">
           {/* Left Heading — 2 Columns */}
           <motion.div
             initial={{ opacity: 0, x: -30 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.7, ease: "easeOut" }}
-            className="w-full lg:w-1/3 space-y-6"
+            className="w-full lg:w-1/3 space-y-3"
           >
-            <h2 className="text-4xl md:text-5xl font-extrabold leading-[1.1] tracking-tight text-foreground">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold leading-[1.15] tracking-tight text-foreground">
               Frequently <br className="hidden lg:block" /> Asked Questions
             </h2>
-            <p className="text-muted-foreground text-lg leading-relaxed">
+            <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
               Clear answers to common questions about learning with Root Over
               Education.
             </p>
