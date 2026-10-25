@@ -1,9 +1,11 @@
 "use client";
 
-// Demo store + mock authentication. FOR UI PREVIEW ONLY - this is not secure:
-// passwords are plain text in the bundle and the "session" is a localStorage
-// key. The whole demo database lives in React state and is persisted to
-// localStorage so actions survive refreshes and sync across tabs.
+// Session + demo store. Authentication is real: the backend issues a JWT
+// (stored in localStorage, sent as a Bearer token by lib/api.ts) and `user` is
+// the account from GET /auth/me. Pages already connected to the API fetch
+// their own data; the rest still read the mock database below, which lives in
+// React state, is persisted to localStorage and shares its seed ids with the
+// backend's seed, so the signed-in user's id finds their mock records.
 import {
   createContext,
   useCallback,
@@ -16,25 +18,15 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { createSeedDB, DB_VERSION, DEMO_ACCOUNTS } from "@/lib/seed";
-import { checkCoupon, MIN_WITHDRAWAL, quote, REGISTRATION_FEE } from "@/lib/pricing";
-import { trxId, uid } from "@/lib/format";
-import {
-  catalogCourses,
-  enrollmentFor,
-  findLesson,
-  getTeacherByUser,
-  lessonAccess,
-  teacherFinance,
-} from "@/lib/selectors";
+import { api, ApiError, getToken, SESSION_EVENT, setToken } from "@/lib/api";
+import type { ApiUser, Session } from "@/lib/api-types";
+import { uid } from "@/lib/format";
+import { findLesson, getTeacherByUser, lessonAccess } from "@/lib/selectors";
 import { isActiveReport, reportContext } from "@/lib/reports";
 import type {
   ApplicationStatus,
-  Coupon,
-  Course,
   CourseStatus,
   DemoDB,
-  PaymentMethod,
-  Purchase,
   ReportReason,
   Role,
   TeacherApplication,
@@ -46,7 +38,25 @@ import type {
 } from "@/lib/types";
 
 const DB_KEY = "rootover_demo_db";
-const SESSION_KEY = "rootover_demo_session";
+const TOKEN_KEY = "rootover_token";
+
+export interface Registration {
+  message: string;
+  email: string;
+  // Seconds until another verification code can be requested
+  resendAvailableIn: number;
+}
+
+export interface ProfilePatch {
+  name?: string;
+  phone?: string;
+  institution?: string;
+  gender?: string;
+  dateOfBirth?: string;
+  avatar?: string;
+  password?: string;
+  currentPassword?: string;
+}
 
 export type ApplicationInput = Omit<
   TeacherApplication,
@@ -55,30 +65,20 @@ export type ApplicationInput = Omit<
 
 interface AppContextValue {
   db: DemoDB;
-  // False until localStorage has been read; gate user-specific UI on it
+  // False until the stored session has been checked; gate user-specific UI on it
   hydrated: boolean;
   user: User | null;
-  login: (email: string, password: string) => User;
-  loginAs: (role: Role) => User;
-  register: (input: { name: string; email: string; password: string }) => User;
+  // Throw ApiError (code EMAIL_NOT_VERIFIED when the sign-up code is pending)
+  login: (email: string, password: string) => Promise<User>;
+  loginAs: (role: Role) => Promise<User>;
+  // Sends a 6-digit code; the account is usable after verifyEmail
+  register: (input: { name: string; email: string; password: string }) => Promise<Registration>;
+  verifyEmail: (email: string, code: string) => Promise<User>;
+  resendVerification: (email: string) => Promise<Registration>;
   logout: () => void;
-  updateUser: (patch: Partial<User>) => void;
-  purchase: (input: {
-    courseId: string;
-    couponCode?: string;
-    method: PaymentMethod;
-  }) => Purchase;
-  toggleSaved: (courseId: string, lessonId: string) => boolean;
-  setLessonComplete: (courseId: string, lessonId: string, done: boolean) => void;
-  recordWatch: (courseId: string, lessonId: string) => void;
-  submitApplication: (input: ApplicationInput) => void;
-  payRegistrationFee: (applicationId: string, payerNumber: string) => void;
-  saveCourse: (course: Course) => void;
-  deleteCourse: (courseId: string) => void;
-  updateTeacherProfile: (teacherId: string, patch: Partial<TeacherProfile>) => void;
-  saveCoupon: (coupon: Coupon) => void;
-  deleteCoupon: (couponId: string) => void;
-  requestWithdrawal: (amount: number, accountNumber: string) => void;
+  updateUser: (patch: ProfilePatch) => Promise<User>;
+  // Reloads the account (e.g. after an admin changed the role)
+  refreshUser: () => Promise<void>;
   reviewApplication: (
     applicationId: string,
     action: "request_payment" | "approve" | "reject",
@@ -105,21 +105,13 @@ function readStoredDB(): DemoDB | null {
   }
 }
 
-function readSession(): string | null {
-  try {
-    return localStorage.getItem(SESSION_KEY);
-  } catch {
-    return null;
-  }
-}
+const fromApi = (u: ApiUser): User => ({ ...u });
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [db, setDb] = useState<DemoDB>(createSeedDB);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const warnedQuota = useRef(false);
-
-  const user = (sessionId && db.users.find((u) => u.id === sessionId)) || null;
 
   // Latest values for validation inside actions, synced before any event handler can run
   const dbRef = useRef(db);
@@ -129,21 +121,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
     userRef.current = user;
   });
 
+  // The account behind the stored token, or null (an invalid token is dropped)
+  const loadSession = useCallback(async () => {
+    if (!getToken()) return setUser(null);
+    try {
+      const me = await api<{ user: ApiUser }>("/auth/me");
+      setUser(fromApi(me.user));
+    } catch (err) {
+      // Network trouble keeps the token for the next try; a rejected one is dropped
+      if (err instanceof ApiError && err.status !== 0) setToken(null);
+      setUser(null);
+    }
+  }, []);
+
   useEffect(() => {
     const stored = readStoredDB();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after mount
     if (stored) setDb(stored);
-    setSessionId(readSession());
-    setHydrated(true);
+    loadSession().finally(() => setHydrated(true));
 
-    // Keep several tabs (e.g. admin + teacher) in sync
+    // Keep several tabs in sync: demo data, and signing in or out
     const onStorage = (e: StorageEvent) => {
       if (e.key === DB_KEY) setDb(readStoredDB() ?? createSeedDB());
-      if (e.key === SESSION_KEY) setSessionId(e.newValue);
+      if (e.key === TOKEN_KEY) void loadSession();
+    };
+    // The API rejected the token mid-session (expired, or the account was banned)
+    const onSessionEnded = (e: Event) => {
+      setToken(null);
+      if (!userRef.current) return;
+      setUser(null);
+      const message = (e as CustomEvent<string>).detail;
+      toast.error(message === "Please log in first." ? "Your session has ended. Please log in again." : message);
     };
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+    window.addEventListener(SESSION_EVENT, onSessionEnded);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(SESSION_EVENT, onSessionEnded);
+    };
+  }, [loadSession]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -157,14 +173,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [db, hydrated]);
 
-  const setSession = useCallback((id: string | null) => {
-    setSessionId(id);
-    try {
-      if (id) localStorage.setItem(SESSION_KEY, id);
-      else localStorage.removeItem(SESSION_KEY);
-    } catch {
-      // Session just won't persist
-    }
+  const startSession = useCallback((session: Session) => {
+    setToken(session.token);
+    const next = fromApi(session.user);
+    userRef.current = next;
+    setUser(next);
+    return next;
   }, []);
 
   // Applies a change to a deep copy of the database, with an activity log entry
@@ -191,250 +205,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return userRef.current;
   };
 
-  const login = (email: string, password: string) => {
-    const found = dbRef.current.users.find(
-      (u) => u.email.toLowerCase() === email.trim().toLowerCase() && u.password === password,
-    );
-    if (!found) throw new Error("Incorrect email or password.");
-    if (found.status === "banned")
-      throw new Error("This account has been suspended by an administrator.");
-    setSession(found.id);
-    return found;
-  };
+  const login = async (email: string, password: string) =>
+    startSession(await api<Session>("/auth/login", { method: "POST", body: { email, password } }));
 
   const loginAs = (role: Role) => {
     const account = DEMO_ACCOUNTS.find((a) => a.role === role)!;
     return login(account.email, account.password);
   };
 
-  const register = ({ name, email, password }: { name: string; email: string; password: string }) => {
-    if (dbRef.current.users.some((u) => u.email.toLowerCase() === email.trim().toLowerCase()))
-      throw new Error("An account with this email already exists.");
-    const created: User = {
-      id: uid("u"),
-      name: name.trim(),
-      email: email.trim(),
-      password,
-      role: "student",
-      status: "active",
-      createdAt: new Date().toISOString(),
-    };
-    userRef.current = created;
-    mutate((d) => d.users.push(created), { action: "Registered a new account", target: created.email });
-    setSession(created.id);
-    return created;
-  };
+  const register = (input: { name: string; email: string; password: string }) =>
+    api<Registration>("/auth/register", { method: "POST", body: input });
 
-  const logout = () => setSession(null);
+  const verifyEmail = async (email: string, code: string) =>
+    startSession(await api<Session>("/auth/verify-email", { method: "POST", body: { email, code } }));
 
-  const updateUser = (patch: Partial<User>) => {
-    const current = requireUser();
-    mutate((d) => Object.assign(d.users.find((u) => u.id === current.id)!, patch));
-  };
+  const resendVerification = (email: string) =>
+    api<Registration>("/auth/resend-verification", { method: "POST", body: { email } });
 
-  const purchase: AppContextValue["purchase"] = ({ courseId, couponCode, method }) => {
-    const current = requireUser();
-    if (current.role !== "student") throw new Error("Only student accounts can buy courses.");
-    const d0 = dbRef.current;
-    const course = catalogCourses(d0).find((c) => c.id === courseId);
-    if (!course) throw new Error("This course isn't available for purchase.");
-    if (enrollmentFor(d0, current.id, courseId)) throw new Error("You already own this course.");
-    let coupon: Coupon | undefined;
-    if (couponCode) {
-      const check = checkCoupon(d0.coupons, course, couponCode);
-      if (!check.ok) throw new Error(check.error);
-      coupon = check.coupon;
-    }
-    const q = quote(course, coupon);
-    const now = new Date().toISOString();
-    const record: Purchase = {
-      id: uid("p"),
-      studentId: current.id,
-      courseId,
-      teacherId: course.teacherId,
-      listPrice: q.listPrice,
-      coursePrice: q.coursePrice,
-      couponCode: coupon?.code,
-      couponDiscount: q.couponDiscount,
-      amountPaid: q.total,
-      commission: q.commission,
-      teacherNet: q.teacherNet,
-      method,
-      trxId: trxId(),
-      status: "completed",
-      createdAt: now,
-    };
-    mutate(
-      (d) => {
-        d.purchases.push(record);
-        d.enrollments.push({
-          id: uid("e"),
-          studentId: current.id,
-          courseId,
-          purchaseId: record.id,
-          enrolledAt: now,
-          completedLessonIds: [],
-        });
-        if (coupon) d.coupons.find((c) => c.id === coupon.id)!.usedCount += 1;
-      },
-      { action: "Purchased a course (simulated payment)", target: course.title },
-    );
-    return record;
-  };
+  // Tokens are stateless, so the server call is a courtesy; the local session ends at once
+  const logout = useCallback(() => {
+    if (getToken()) void api("/auth/logout", { method: "POST" }).catch(() => undefined);
+    setToken(null);
+    userRef.current = null;
+    setUser(null);
+  }, []);
 
-  const toggleSaved = (courseId: string, lessonId: string) => {
-    const current = requireUser();
-    const exists = dbRef.current.savedLessons.some(
-      (s) => s.studentId === current.id && s.lessonId === lessonId,
-    );
+  // A password change answers with a fresh token (older ones are revoked)
+  const updateUser = async (patch: ProfilePatch) => {
+    requireUser();
+    const res = await api<{ user: ApiUser; token?: string }>("/me", { method: "PATCH", body: patch });
+    if (res.token) setToken(res.token);
+    const next = fromApi(res.user);
+    setUser(next);
+    // Mirror into the demo data so pages still on the mock show the new name/avatar
     mutate((d) => {
-      if (exists) {
-        d.savedLessons = d.savedLessons.filter(
-          (s) => !(s.studentId === current.id && s.lessonId === lessonId),
-        );
-      } else {
-        d.savedLessons.push({
-          id: uid("sv"),
-          studentId: current.id,
-          courseId,
-          lessonId,
-          savedAt: new Date().toISOString(),
-        });
-      }
+      const mock = d.users.find((u) => u.id === next.id);
+      if (mock) Object.assign(mock, res.user);
     });
-    return !exists;
+    return next;
   };
 
-  const setLessonComplete = (courseId: string, lessonId: string, done: boolean) => {
-    const current = requireUser();
-    mutate((d) => {
-      const e = enrollmentFor(d, current.id, courseId);
-      if (!e) return;
-      e.completedLessonIds = done
-        ? [...new Set([...e.completedLessonIds, lessonId])]
-        : e.completedLessonIds.filter((id) => id !== lessonId);
-    });
-  };
-
-  const recordWatch = (courseId: string, lessonId: string) => {
-    const current = userRef.current;
-    if (!current) return;
-    const e = enrollmentFor(dbRef.current, current.id, courseId);
-    if (!e || e.lastLessonId === lessonId) return;
-    mutate((d) => {
-      const target = enrollmentFor(d, current.id, courseId)!;
-      target.lastLessonId = lessonId;
-      target.lastWatchedAt = new Date().toISOString();
-    });
-  };
-
-  const submitApplication = (input: ApplicationInput) => {
-    const current = requireUser();
-    const now = new Date().toISOString();
-    mutate(
-      (d) =>
-        d.applications.push({
-          ...input,
-          id: uid("app"),
-          userId: current.id,
-          status: "pending_review",
-          submittedAt: now,
-          updatedAt: now,
-        }),
-      { action: "Submitted a teacher application", target: input.fullName },
-    );
-  };
-
-  const payRegistrationFee = (applicationId: string, payerNumber: string) => {
-    const current = requireUser();
-    mutate(
-      (d) => {
-        const app = d.applications.find((a) => a.id === applicationId)!;
-        app.status = "under_verification";
-        app.updatedAt = new Date().toISOString();
-        d.registrationFees.push({
-          id: uid("fee"),
-          applicationId,
-          userId: current.id,
-          amount: REGISTRATION_FEE,
-          method: "bKash",
-          payerNumber,
-          trxId: trxId(),
-          paidAt: new Date().toISOString(),
-        });
-      },
-      { action: "Paid the teacher registration fee (simulated)", target: `৳${REGISTRATION_FEE} via bKash` },
-    );
-  };
-
-  const saveCourse = (course: Course) => {
-    const existing = dbRef.current.courses.find((c) => c.id === course.id);
-    const submitted = course.status === "pending" && existing?.status !== "pending";
-    mutate(
-      (d) => {
-        const next = { ...course, updatedAt: new Date().toISOString() };
-        const i = d.courses.findIndex((c) => c.id === course.id);
-        if (i >= 0) d.courses[i] = next;
-        else d.courses.push(next);
-      },
-      submitted
-        ? { action: "Submitted a course for approval", target: course.title }
-        : existing
-          ? undefined
-          : { action: "Created a course draft", target: course.title },
-    );
-  };
-
-  const deleteCourse = (courseId: string) => {
-    const course = dbRef.current.courses.find((c) => c.id === courseId);
-    mutate((d) => {
-      d.courses = d.courses.filter((c) => c.id !== courseId);
-    }, course && { action: "Deleted a course", target: course.title });
-  };
-
-  const updateTeacherProfile = (teacherId: string, patch: Partial<TeacherProfile>) => {
-    mutate((d) => Object.assign(d.teachers.find((t) => t.id === teacherId)!, patch));
-  };
-
-  const saveCoupon = (coupon: Coupon) => {
-    const isNew = !dbRef.current.coupons.some((c) => c.id === coupon.id);
-    mutate(
-      (d) => {
-        const i = d.coupons.findIndex((c) => c.id === coupon.id);
-        if (i >= 0) d.coupons[i] = coupon;
-        else d.coupons.push(coupon);
-      },
-      isNew ? { action: "Created a coupon", target: coupon.code } : undefined,
-    );
-  };
-
-  const deleteCoupon = (couponId: string) => {
-    mutate((d) => {
-      d.coupons = d.coupons.filter((c) => c.id !== couponId);
-    });
-  };
-
-  const requestWithdrawal = (amount: number, accountNumber: string) => {
-    const current = requireUser();
-    const teacher = getTeacherByUser(dbRef.current, current.id);
-    if (!teacher) throw new Error("Only approved teachers can withdraw.");
-    const { withdrawable } = teacherFinance(dbRef.current, teacher.id);
-    if (amount < MIN_WITHDRAWAL) throw new Error(`The minimum withdrawal is ৳${MIN_WITHDRAWAL}.`);
-    if (amount > withdrawable) throw new Error("The amount is more than your withdrawable balance.");
-    mutate(
-      (d) =>
-        d.withdrawals.unshift({
-          id: uid("w"),
-          teacherId: teacher.id,
-          amount,
-          method: "bKash",
-          accountNumber,
-          status: "pending",
-          requestedAt: new Date().toISOString(),
-        }),
-      { action: "Requested a withdrawal", target: `৳${amount.toLocaleString("en-US")}` },
-    );
-  };
+  const refreshUser = loadSession;
 
   const reviewApplication: AppContextValue["reviewApplication"] = (applicationId, action, note) => {
     const app = dbRef.current.applications.find((a) => a.id === applicationId);
@@ -633,20 +444,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         login,
         loginAs,
         register,
+        verifyEmail,
+        resendVerification,
         logout,
         updateUser,
-        purchase,
-        toggleSaved,
-        setLessonComplete,
-        recordWatch,
-        submitApplication,
-        payRegistrationFee,
-        saveCourse,
-        deleteCourse,
-        updateTeacherProfile,
-        saveCoupon,
-        deleteCoupon,
-        requestWithdrawal,
+        refreshUser,
         reviewApplication,
         setCourseStatus,
         setUserStatus,

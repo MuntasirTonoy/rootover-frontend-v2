@@ -3,13 +3,17 @@
 import Link from "next/link";
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Camera, GraduationCap, Loader2, PlayCircle, Save, Upload, UserRound } from "lucide-react";
+import { Camera, GraduationCap, Loader2, PlayCircle, Save, UserRound } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { Avatar, Field, PageHeader } from "@/components/ui/primitives";
 import { useApp } from "@/context/AppStore";
-import { progressOf, studentCourses, teacherInfo } from "@/lib/selectors";
+import { ApiError, errorMessage } from "@/lib/api";
+import type { EnrolledCourse } from "@/lib/api-types";
 import type { User } from "@/lib/types";
+import { useApi } from "@/lib/use-api";
 import { btn, field, fieldError } from "@/lib/ui";
+
+type Errors = { name?: string; phone?: string; password?: string; currentPassword?: string; _?: string };
 
 const AVATARS = [
   "Felix", "Aneka", "Zoe", "Jack", "Bella", "Shadow", "Ginger", "Midnight",
@@ -23,7 +27,7 @@ export default function ProfilePage() {
 }
 
 function ProfileForm({ user }: { user: User }) {
-  const { db, updateUser } = useApp();
+  const { updateUser } = useApp();
   const [form, setForm] = useState({
     name: user.name,
     phone: user.phone ?? "",
@@ -31,50 +35,52 @@ function ProfileForm({ user }: { user: User }) {
     gender: user.gender ?? "",
     dateOfBirth: user.dateOfBirth ?? "",
     password: "",
+    currentPassword: "",
   });
-  const [errors, setErrors] = useState<{ name?: string; phone?: string; password?: string }>({});
+  const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [tempAvatar, setTempAvatar] = useState(user.avatar ?? "");
 
-  const owned = studentCourses(db, user.id);
+  // Only students have purchased courses
+  const owned = useApi<EnrolledCourse[]>(user.role === "student" ? "/me/enrollments" : null).data ?? [];
   const set = (key: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const found: typeof errors = {};
-    if (form.name.trim().length < 2) found.name = "Enter your name.";
+    const found: Errors = {};
+    if (form.name.trim().length < 2) found.name = "Enter your full name.";
     if (form.phone && !/^01\d{9}$/.test(form.phone)) found.phone = "Use an 11-digit number starting with 01.";
     if (form.password && form.password.length < 6) found.password = "Use at least 6 characters.";
+    if (form.password && !form.currentPassword) found.currentPassword = "Enter your current password.";
     setErrors(found);
     if (Object.keys(found).length) return;
 
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 400));
-    const { password, ...rest } = form;
-    updateUser({ ...rest, name: rest.name.trim(), ...(password ? { password } : {}) });
-    setForm((f) => ({ ...f, password: "" }));
-    setSaving(false);
-    toast.success("Profile updated");
-  };
-
-  const handleUpload = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/") || file.size > 1024 * 1024) {
-      toast.error("Choose an image smaller than 1MB.");
-      return;
+    const { password, currentPassword, ...rest } = form;
+    try {
+      // Empty strings clear optional fields; a new password needs the current one
+      await updateUser({ ...rest, name: rest.name.trim(), ...(password ? { password, currentPassword } : {}) });
+      setForm((f) => ({ ...f, password: "", currentPassword: "" }));
+      toast.success(password ? "Profile and password updated" : "Profile updated");
+    } catch (err) {
+      const fields = err instanceof ApiError ? err.fields : undefined;
+      setErrors(fields && Object.keys(fields).length ? fields : { _: errorMessage(err) });
+    } finally {
+      setSaving(false);
     }
-    const reader = new FileReader();
-    reader.onload = () => setTempAvatar(reader.result as string);
-    reader.readAsDataURL(file);
   };
 
-  const saveAvatar = () => {
-    updateUser({ avatar: tempAvatar || undefined });
-    setAvatarOpen(false);
-    toast.success("Avatar updated");
+  // Presets only for now: the API stores https links, and photo uploads arrive with the uploads endpoint
+  const saveAvatar = async () => {
+    try {
+      await updateUser({ avatar: tempAvatar });
+      setAvatarOpen(false);
+      toast.success("Avatar updated");
+    } catch (err) {
+      toast.error(errorMessage(err));
+    }
   };
 
   return (
@@ -112,37 +118,25 @@ function ProfileForm({ user }: { user: User }) {
             </h3>
             {owned.length ? (
               <div className="space-y-3">
-                {owned.map(({ course, enrollment }) => {
-                  const teacher = teacherInfo(db, course.teacherId);
-                  const progress = progressOf(course, enrollment);
-                  return (
-                    <Link
-                      key={course.id}
-                      href={`/learn/${course.id}`}
-                      className="block rounded-md border border-border bg-background p-3 hover:border-primary/50 group"
-                    >
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-primary">
-                        {course.level} · {course.subject}
-                      </p>
-                      <h4 className="text-sm font-bold text-foreground group-hover:text-primary">{course.title}</h4>
-                      {teacher && (
-                        <div className="mt-2 flex items-start gap-2 text-xs text-muted-foreground">
-                          <UserRound size={14} className="mt-0.5 shrink-0" />
-                          <div className="min-w-0">
-                            <p className="truncate font-semibold text-foreground">{teacher.name}</p>
-                            <p className="truncate">
-                              {teacher.headline}
-                              {teacher.institution && `, ${teacher.institution}`}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                      <p className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
-                        <PlayCircle size={12} /> {progress.completed}/{progress.total} lessons · {progress.percent}%
-                      </p>
-                    </Link>
-                  );
-                })}
+                {owned.map(({ course, progress, resumeLessonId }) => (
+                  <Link
+                    key={course.id}
+                    href={`/learn/${course.id}${resumeLessonId ? `?lesson=${resumeLessonId}` : ""}`}
+                    className="block rounded-md border border-border bg-background p-3 hover:border-primary/50 group"
+                  >
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                      {course.level} · {course.subject}
+                    </p>
+                    <h4 className="text-sm font-bold text-foreground group-hover:text-primary">{course.title}</h4>
+                    <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                      <UserRound size={14} className="shrink-0" />
+                      <span className="truncate font-semibold text-foreground">{course.teacher.name}</span>
+                    </p>
+                    <p className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
+                      <PlayCircle size={12} /> {progress.completed}/{progress.total} lessons · {progress.percent}%
+                    </p>
+                  </Link>
+                ))}
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">
@@ -164,7 +158,7 @@ function ProfileForm({ user }: { user: User }) {
           <Field label="Full name" htmlFor="name" error={errors.name}>
             <input id="name" value={form.name} onChange={set("name")} className={`${field} ${errors.name ? fieldError : ""}`} />
           </Field>
-          <Field label="Email" htmlFor="email" hint="Email can't be changed in the demo.">
+          <Field label="Email" htmlFor="email" hint="Email can't be changed.">
             <input id="email" value={user.email} disabled className={field} />
           </Field>
           <div className="grid sm:grid-cols-2 gap-5">
@@ -203,6 +197,24 @@ function ProfileForm({ user }: { user: User }) {
               className={`${field} ${errors.password ? fieldError : ""}`}
             />
           </Field>
+          {/* Needed (and only shown) when changing the password */}
+          {form.password && (
+            <Field label="Current password" htmlFor="currentPassword" error={errors.currentPassword}>
+              <input
+                id="currentPassword"
+                type="password"
+                autoComplete="current-password"
+                value={form.currentPassword}
+                onChange={set("currentPassword")}
+                className={`${field} ${errors.currentPassword ? fieldError : ""}`}
+              />
+            </Field>
+          )}
+          {errors._ && (
+            <p role="alert" className="rounded-md bg-red-500/10 px-3 py-2 text-sm font-medium text-red-600">
+              {errors._}
+            </p>
+          )}
           <div className="flex justify-end">
             <button type="submit" disabled={saving} className={`${btn.primary} w-full sm:w-auto`}>
               {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
@@ -227,10 +239,7 @@ function ProfileForm({ user }: { user: User }) {
           </>
         }
       >
-        <label className={`${btn.secondary} w-full cursor-pointer mb-4`}>
-          <Upload size={16} /> Upload your own (max 1MB)
-          <input type="file" accept="image/*" onChange={handleUpload} className="sr-only" />
-        </label>
+        <p className="mb-4 text-xs text-muted-foreground">Uploading your own photo is coming soon.</p>
         <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
           {AVATARS.map((avatar, i) => (
             <button

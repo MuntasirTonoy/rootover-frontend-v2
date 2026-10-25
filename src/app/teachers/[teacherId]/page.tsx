@@ -4,12 +4,12 @@ import { Suspense, use } from "react";
 import Link from "next/link";
 import { BadgeCheck, BookOpen, Building2, GraduationCap, Star, UserX, Users } from "lucide-react";
 import CourseCard from "@/components/CourseCard";
-import { useTeacherStats } from "@/components/course/TeacherCard";
 import LoadingAnimation from "@/components/LoadingAnimation";
+import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import { Avatar, EmptyBlock } from "@/components/ui/primitives";
-import { useApp } from "@/context/AppStore";
+import type { CourseSummary, TeacherPublic } from "@/lib/api-types";
 import { formatDate } from "@/lib/format";
-import { teacherInfo } from "@/lib/selectors";
+import { useApi } from "@/lib/use-api";
 import { btn } from "@/lib/ui";
 
 interface TeacherPageProps {
@@ -32,11 +32,11 @@ export default function TeacherProfilePage({ params }: TeacherPageProps) {
 
 function TeacherProfile({ params }: TeacherPageProps) {
   const { teacherId } = use(params);
-  const { db } = useApp();
-  const teacher = teacherInfo(db, teacherId);
-  const stats = useTeacherStats(teacherId);
+  // 404 for unknown or banned teachers; courses are their published ones
+  const profile = useApi<{ teacher: TeacherPublic; courses: CourseSummary[] }>(`/teachers/${teacherId}`);
 
-  if (!teacher || teacher.status !== "active") {
+  if (!ready(profile) && profile.error?.status !== 404) return <ApiStatus state={profile} className="min-h-[60vh]" />;
+  if (!profile.data) {
     return (
       <div className="container-custom py-16">
         <EmptyBlock
@@ -52,6 +52,9 @@ function TeacherProfile({ params }: TeacherPageProps) {
       </div>
     );
   }
+
+  const { teacher, courses } = profile.data;
+  const { stats } = teacher;
 
   return (
     <div className="pb-16">
@@ -70,7 +73,7 @@ function TeacherProfile({ params }: TeacherPageProps) {
                 </span>
               )}
               <span className="flex items-center gap-1.5">
-                <BookOpen size={15} /> {stats.courses.length} courses
+                <BookOpen size={15} /> {stats.courses} courses
               </span>
               <span className="flex items-center gap-1.5">
                 <Users size={15} /> {stats.students} students
@@ -108,9 +111,9 @@ function TeacherProfile({ params }: TeacherPageProps) {
 
         <section className="lg:col-span-2">
           <h2 className="text-lg font-bold mb-4">Courses by {teacher.name}</h2>
-          {stats.courses.length ? (
+          {courses.length ? (
             <div className="grid grid-cols-2 gap-3 sm:gap-6">
-              {stats.courses.map((c) => (
+              {courses.map((c) => (
                 <CourseCard key={c.id} course={c} />
               ))}
             </div>

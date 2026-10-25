@@ -21,23 +21,21 @@ import {
 import CurriculumSidebar from "@/components/course/CurriculumSidebar";
 import ReportVideoButton from "@/components/course/ReportVideoButton";
 import LoadingAnimation from "@/components/LoadingAnimation";
+import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import { Avatar, EmptyBlock } from "@/components/ui/primitives";
 import { useApp } from "@/context/AppStore";
+import { api, errorMessage } from "@/lib/api";
+import type { ChapterPublic, LessonPublic, PlayerData, Progress } from "@/lib/api-types";
 import { formatBDT, formatDuration } from "@/lib/format";
-import { coursePrice } from "@/lib/pricing";
-import {
-  catalogCourses,
-  enrollmentFor,
-  flattenLessons,
-  getCourse,
-  lessonAccess,
-  progressOf,
-  resumeLesson,
-  teacherInfo,
-} from "@/lib/selectors";
+import { useApi } from "@/lib/use-api";
 import { getEmbedUrl } from "@/lib/youtube";
-import type { Lesson } from "@/lib/types";
 import { btn } from "@/lib/ui";
+
+// Lessons in curriculum order with their chapter, for prev/next navigation
+const flatten = (chapters: ChapterPublic[]) =>
+  chapters.flatMap((ch, chapterIndex) =>
+    ch.lessons.map((lesson) => ({ lesson, chapterIndex, chapterTitle: ch.title })),
+  ).map((f, index) => ({ ...f, index }));
 
 interface LearnPageProps {
   params: Promise<{ courseId: string }>;
@@ -59,47 +57,52 @@ export default function LearnPage({ params }: LearnPageProps) {
 
 function Player({ params }: LearnPageProps) {
   const { courseId } = use(params);
-  const { db, user, hydrated, toggleSaved, setLessonComplete, recordWatch } = useApp();
+  const { user } = useApp();
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedId = searchParams.get("lesson");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Optimistic copies of what the student changes here, tied to the response
+  // they were made on: fresh server data (reload, another course) drops them
+  const [local, setLocal] = useState<{
+    base?: PlayerData;
+    saved?: Set<string>;
+    completed?: Set<string>;
+    progress?: Progress;
+  }>({});
 
-  const course = getCourse(db, courseId);
-  const access = course ? lessonAccess(db, course, user) : null;
-  const published = !!course && catalogCourses(db).some((c) => c.id === course.id);
-  const visible = !!course && (published || access?.owner || user?.role === "admin");
+  // Visibility and locking come from the API: locked lessons have no video link
+  const player = useApi<PlayerData>(`/learn/${courseId}`);
+  const course = player.data?.course;
+  const enrollment = course?.enrollment;
 
-  const lessons = course ? flattenLessons(course) : [];
-  const enrollment = course && user ? enrollmentFor(db, user.id, course.id) : undefined;
-  const fallback = course && (access?.full ? resumeLesson(course, enrollment) : lessons.find((f) => f.lesson.isPreview)?.lesson);
-  const current = lessons.find((f) => f.lesson.id === requestedId) ?? lessons.find((f) => f.lesson.id === fallback?.id);
+  const lessons = course ? flatten(course.chapters) : [];
+  const fallbackId = course?.access.full
+    ? (enrollment?.resumeLessonId ?? lessons[0]?.lesson.id)
+    : lessons.find((f) => f.lesson.isPreview)?.lesson.id;
+  const current = lessons.find((f) => f.lesson.id === requestedId) ?? lessons.find((f) => f.lesson.id === fallbackId);
   const lesson = current?.lesson;
-  const watchable = !!lesson && !!access?.canWatch(lesson);
+  const watchable = !!lesson?.canWatch;
 
   // Put the resolved lesson in the URL so refresh/share opens the same lesson
   useEffect(() => {
-    if (hydrated && lesson && requestedId !== lesson.id) {
+    if (lesson && requestedId !== lesson.id) {
       router.replace(`/learn/${courseId}?lesson=${lesson.id}`);
     }
-  }, [hydrated, lesson, requestedId, router, courseId]);
+  }, [lesson, requestedId, router, courseId]);
 
+  // "Continue learning" position; the API ignores it unless the student is enrolled
   useEffect(() => {
-    if (watchable && lesson && enrollment) recordWatch(courseId, lesson.id);
+    if (watchable && lesson && enrollment && user?.role === "student")
+      void api(`/learn/${courseId}/lessons/${lesson.id}/watch`, { method: "POST" }).catch(() => undefined);
     // Only when the lesson changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lesson?.id, watchable, !!enrollment]);
 
-  if (!hydrated) {
-    return (
-      <div className="min-h-[70vh] flex items-center justify-center">
-        <LoadingAnimation />
-      </div>
-    );
-  }
+  if (!ready(player) && player.error?.status !== 404) return <ApiStatus state={player} className="min-h-[70vh]" />;
 
-  if (!course || !visible) {
+  if (!course) {
     return (
       <div className="container-custom py-16">
         <EmptyBlock
@@ -115,47 +118,72 @@ function Player({ params }: LearnPageProps) {
     );
   }
 
-  const teacher = teacherInfo(db, course.teacherId);
-  const progress = progressOf(course, enrollment);
-  const completed = new Set(enrollment?.completedLessonIds ?? []);
-  const saved = new Set(
-    db.savedLessons.filter((s) => s.studentId === user?.id && s.courseId === course.id).map((s) => s.lessonId),
-  );
+  const { teacher, access, published } = course;
+  const localNow = local.base === player.data ? local : {};
+  const change = (patch: Omit<typeof local, "base">) =>
+    setLocal((prev) => ({ ...(prev.base === player.data ? prev : {}), ...patch, base: player.data }));
+  const progress = localNow.progress ?? enrollment?.progress ?? { completed: 0, total: lessons.length, percent: 0 };
+  const completedIds = localNow.completed ?? new Set(enrollment?.completedLessonIds ?? []);
+  const savedIds = localNow.saved ?? new Set(player.data!.savedLessonIds);
   const prev = current ? lessons[current.index - 1] : undefined;
   const next = current ? lessons[current.index + 1] : undefined;
-  const isDone = !!lesson && completed.has(lesson.id);
-  const isSaved = !!lesson && saved.has(lesson.id);
+  const isDone = !!lesson && completedIds.has(lesson.id);
+  const isSaved = !!lesson && savedIds.has(lesson.id);
   // Guests see the buy prompt too; checkout asks them to log in
   const canBuy = published && (!user || user.role === "student");
 
-  const go = (target: Lesson) => {
+  const go = (target: LessonPublic) => {
     setDrawerOpen(false);
     router.push(`/learn/${courseId}?lesson=${target.id}`);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!lesson) return;
     if (!user) {
       router.push(`/login?redirect=${encodeURIComponent(`/learn/${courseId}?lesson=${lesson.id}`)}`);
       return;
     }
-    const nowSaved = toggleSaved(course.id, lesson.id);
-    toast.success(nowSaved ? "Saved to your videos" : "Removed from saved videos");
+    const toggled = new Set(savedIds);
+    if (isSaved) toggled.delete(lesson.id);
+    else toggled.add(lesson.id);
+    change({ saved: toggled });
+    try {
+      if (isSaved) await api(`/me/saved-lessons/${lesson.id}`, { method: "DELETE" });
+      else await api("/me/saved-lessons", { method: "POST", body: { courseId, lessonId: lesson.id } });
+      toast.success(isSaved ? "Removed from saved videos" : "Saved to your videos");
+    } catch (err) {
+      change({ saved: savedIds });
+      toast.error(errorMessage(err));
+    }
   };
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     if (!lesson) return;
-    setLessonComplete(course.id, lesson.id, !isDone);
-    if (!isDone && next && access?.canWatch(next.lesson)) go(next.lesson);
+    const done = !isDone;
+    const toggled = new Set(completedIds);
+    if (done) toggled.add(lesson.id);
+    else toggled.delete(lesson.id);
+    change({ completed: toggled });
+    if (done && next?.lesson.canWatch) go(next.lesson);
+    try {
+      const res = await api<{ progress: Progress }>(`/learn/${courseId}/lessons/${lesson.id}/complete`, {
+        method: "PUT",
+        body: { done },
+      });
+      change({ completed: toggled, progress: res.progress });
+    } catch (err) {
+      change({ completed: completedIds });
+      toast.error(errorMessage(err));
+    }
   };
 
   const sidebar = (
     <CurriculumSidebar
       chapters={course.chapters}
       activeLessonId={lesson?.id}
-      completed={completed}
-      saved={saved}
-      canWatch={(l) => !!access?.canWatch(l)}
+      completed={completedIds}
+      saved={savedIds}
+      canWatch={(l) => l.canWatch}
       onSelect={go}
     />
   );
@@ -175,12 +203,10 @@ function Player({ params }: LearnPageProps) {
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-sm sm:text-base font-bold text-foreground">{course.title}</h1>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              {teacher && (
-                <Link href={`/teachers/${teacher.id}`} className="flex min-w-0 items-center gap-1.5 hover:text-primary">
-                  <Avatar name={teacher.name} src={teacher.avatar} size="w-4 h-4 text-[8px]" />
-                  <span className="truncate">{teacher.name}</span>
-                </Link>
-              )}
+              <Link href={`/teachers/${teacher.id}`} className="flex min-w-0 items-center gap-1.5 hover:text-primary">
+                <Avatar name={teacher.name} src={teacher.avatar} size="w-4 h-4 text-[8px]" />
+                <span className="truncate">{teacher.name}</span>
+              </Link>
               {/* Progress moves here on phones; the header has no room for it */}
               {enrollment && (
                 <span className="sm:hidden shrink-0">
@@ -221,7 +247,7 @@ function Player({ params }: LearnPageProps) {
               {lesson && watchable ? (
                 <iframe
                   key={lesson.id}
-                  src={getEmbedUrl(lesson.videoUrl)}
+                  src={getEmbedUrl(lesson.videoUrl ?? undefined)}
                   title={lesson.title}
                   className="h-full w-full"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -236,7 +262,7 @@ function Player({ params }: LearnPageProps) {
                   </p>
                   {canBuy && (
                     <Link href={`/checkout?courseId=${course.id}`} className={`${btn.primary} py-2 text-xs sm:py-2.5 sm:text-sm`}>
-                      Enroll for {formatBDT(coursePrice(course))}
+                      Enroll for {formatBDT(course.effectivePrice)}
                     </Link>
                   )}
                 </div>
@@ -255,7 +281,7 @@ function Player({ params }: LearnPageProps) {
                     <p className="mt-1 text-sm text-muted-foreground">
                       {formatDuration(lesson.durationMin)}
                       {isDone && <span className="ml-2 font-semibold text-green-600">· Completed</span>}
-                      {!access?.full && lesson.isPreview && <span className="ml-2 font-semibold text-primary">· Free preview</span>}
+                      {!access.full && lesson.isPreview && <span className="ml-2 font-semibold text-primary">· Free preview</span>}
                     </p>
                   </div>
                   {/* Saving and progress tracking are learner features */}
@@ -304,7 +330,7 @@ function Player({ params }: LearnPageProps) {
                   </button>
                 </div>
 
-                {!access?.full && canBuy && (
+                {!access.full && canBuy && (
                   <div className="mt-6 rounded-lg border border-primary/30 bg-primary/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <p className="text-sm">
                       You&apos;re watching a free preview. Get all {lessons.length} lessons with the full course.

@@ -18,6 +18,8 @@ interface DataTableProps<T> {
   emptyTitle?: string;
   emptyDescription?: string;
   onRowClick?: (row: T) => void;
+  // Rows are already one page from the API; the controls ask for other pages
+  serverPage?: { page: number; pages: number; total: number; onPageChange: (page: number) => void; loading?: boolean };
 }
 
 // Scrolls horizontally on small screens instead of collapsing into cards
@@ -29,9 +31,14 @@ export default function DataTable<T>({
   emptyTitle = "Nothing to show",
   emptyDescription,
   onRowClick,
+  serverPage,
 }: DataTableProps<T>) {
   const [page, setPage] = useState(1);
-  const { pageItems, totalPages, currentPage } = paginate(rows, page, pageSize);
+  const local = paginate(rows, page, pageSize);
+  const { pageItems, totalPages, currentPage } = serverPage
+    ? { pageItems: rows, totalPages: Math.max(1, serverPage.pages), currentPage: serverPage.page }
+    : local;
+  const total = serverPage?.total ?? rows.length;
 
   if (rows.length === 0) {
     return <EmptyBlock title={emptyTitle} description={emptyDescription} />;
@@ -39,7 +46,7 @@ export default function DataTable<T>({
 
   return (
     <div>
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <div className={`overflow-x-auto rounded-lg border border-border ${serverPage?.loading ? "opacity-60" : ""}`}>
         <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-surface text-left text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
@@ -69,9 +76,14 @@ export default function DataTable<T>({
       </div>
       <div className="flex items-center justify-between gap-3">
         <p className="mt-8 text-xs text-muted-foreground hidden sm:block">
-          {rows.length} record{rows.length === 1 ? "" : "s"}
+          {total} record{total === 1 ? "" : "s"}
         </p>
-        <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setPage} />
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={serverPage?.onPageChange ?? setPage}
+          isLoading={serverPage?.loading}
+        />
       </div>
     </div>
   );

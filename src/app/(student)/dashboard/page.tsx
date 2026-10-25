@@ -3,41 +3,22 @@
 import Link from "next/link";
 import { ArrowRight, Bookmark, CheckCircle2, GraduationCap, Library, PlayCircle, Receipt, User } from "lucide-react";
 import EnrolledCourseCard from "@/components/course/EnrolledCourseCard";
+import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import { EmptyBlock, PageHeader, Section, StatCard, StatusBadge } from "@/components/ui/primitives";
 import { useApp } from "@/context/AppStore";
+import type { StudentDashboard as Dashboard } from "@/lib/api-types";
 import { formatBDT, formatDate } from "@/lib/format";
-import {
-  findLesson,
-  getCourse,
-  latestApplication,
-  progressOf,
-  studentCourses,
-  teacherInfo,
-} from "@/lib/selectors";
+import { useApi } from "@/lib/use-api";
 import { btn } from "@/lib/ui";
 
 export default function StudentDashboard() {
-  const { db, user } = useApp();
-  const owned = studentCourses(db, user!.id);
-  const totals = owned.reduce(
-    (acc, { course, enrollment }) => {
-      const p = progressOf(course, enrollment);
-      return { completed: acc.completed + p.completed, total: acc.total + p.total };
-    },
-    { completed: 0, total: 0 },
-  );
-  const overall = totals.total ? Math.round((totals.completed / totals.total) * 100) : 0;
-  const saved = db.savedLessons.filter((s) => s.studentId === user!.id);
-  const purchases = db.purchases
-    .filter((p) => p.studentId === user!.id)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const recent = owned
-    .filter((o) => o.enrollment.lastWatchedAt && o.enrollment.lastLessonId)
-    .sort((a, b) => b.enrollment.lastWatchedAt!.localeCompare(a.enrollment.lastWatchedAt!));
-  const continueList = (recent.length ? recent : owned)
-    .filter((o) => progressOf(o.course, o.enrollment).percent < 100)
-    .slice(0, 3);
-  const application = latestApplication(db, user!.id);
+  const { user } = useApp();
+  const dashboard = useApi<Dashboard>("/me/dashboard");
+  if (!ready(dashboard)) return <ApiStatus state={dashboard} />;
+
+  // Lists come capped and sorted: continue ≤3, recently watched ≤5, saved ≤5, purchases ≤4
+  const { stats, continueLearning: continueList, recentlyWatched: recent, saved, recentPurchases: purchases, application } =
+    dashboard.data;
 
   return (
     <div className="space-y-6">
@@ -52,10 +33,10 @@ export default function StudentDashboard() {
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Enrolled courses" value={owned.length} icon={Library} />
-        <StatCard label="Lessons completed" value={`${totals.completed}/${totals.total}`} icon={CheckCircle2} />
-        <StatCard label="Overall progress" value={`${overall}%`} icon={GraduationCap} hint="Across all your courses" />
-        <StatCard label="Saved videos" value={saved.length} icon={Bookmark} />
+        <StatCard label="Enrolled courses" value={stats.enrolled} icon={Library} />
+        <StatCard label="Lessons completed" value={`${stats.lessonsCompleted}/${stats.lessonsTotal}`} icon={CheckCircle2} />
+        <StatCard label="Overall progress" value={`${stats.overallPercent}%`} icon={GraduationCap} hint="Across all your courses" />
+        <StatCard label="Saved videos" value={stats.saved} icon={Bookmark} />
       </div>
 
       <Section
@@ -68,20 +49,15 @@ export default function StudentDashboard() {
       >
         {continueList.length ? (
           <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
-            {continueList.map(({ course, enrollment }) => (
-              <EnrolledCourseCard
-                key={course.id}
-                course={course}
-                enrollment={enrollment}
-                teacherName={teacherInfo(db, course.teacherId)?.name}
-              />
+            {continueList.map((item) => (
+              <EnrolledCourseCard key={item.course.id} item={item} showTeacher />
             ))}
           </div>
         ) : (
           <EmptyBlock
             icon={Library}
-            title={owned.length ? "You've finished all your courses!" : "No courses yet"}
-            description={owned.length ? "Find your next course in the catalog." : "Buy a course to start learning."}
+            title={stats.enrolled ? "You've finished all your courses!" : "No courses yet"}
+            description={stats.enrolled ? "Find your next course in the catalog." : "Buy a course to start learning."}
             action={
               <Link href="/courses" className={btn.primary}>
                 Browse courses
@@ -95,18 +71,17 @@ export default function StudentDashboard() {
         <Section title="Recently watched">
           {recent.length ? (
             <ul className="divide-y divide-border">
-              {recent.slice(0, 5).map(({ course, enrollment }) => {
-                const found = findLesson(course, enrollment.lastLessonId!);
-                return (
-                  found && (
+              {recent.map(
+                ({ course, enrollment, lastLesson }) =>
+                  lastLesson && (
                     <li key={course.id}>
                       <Link
-                        href={`/learn/${course.id}?lesson=${found.lesson.id}`}
+                        href={`/learn/${course.id}?lesson=${lastLesson.id}`}
                         className="flex items-center gap-3 py-2.5 hover:text-primary"
                       >
                         <PlayCircle size={18} className="text-primary shrink-0" />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold">{found.lesson.title}</p>
+                          <p className="truncate text-sm font-semibold">{lastLesson.title}</p>
                           <p className="truncate text-xs text-muted-foreground">{course.title}</p>
                         </div>
                         <span className="text-xs text-muted-foreground shrink-0">
@@ -114,9 +89,8 @@ export default function StudentDashboard() {
                         </span>
                       </Link>
                     </li>
-                  )
-                );
-              })}
+                  ),
+              )}
             </ul>
           ) : (
             <p className="text-sm text-muted-foreground">Lessons you watch will show up here.</p>
@@ -133,26 +107,20 @@ export default function StudentDashboard() {
         >
           {saved.length ? (
             <ul className="divide-y divide-border">
-              {saved.slice(0, 5).map((s) => {
-                const course = getCourse(db, s.courseId);
-                const found = course && findLesson(course, s.lessonId);
-                return (
-                  found && (
-                    <li key={s.id}>
-                      <Link
-                        href={`/learn/${s.courseId}?lesson=${s.lessonId}`}
-                        className="flex items-center gap-3 py-2.5 hover:text-primary"
-                      >
-                        <Bookmark size={16} className="text-primary shrink-0" />
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold">{found.lesson.title}</p>
-                          <p className="truncate text-xs text-muted-foreground">{course!.title}</p>
-                        </div>
-                      </Link>
-                    </li>
-                  )
-                );
-              })}
+              {saved.map((s) => (
+                <li key={s.id}>
+                  <Link
+                    href={`/learn/${s.course.id}?lesson=${s.lesson.id}`}
+                    className="flex items-center gap-3 py-2.5 hover:text-primary"
+                  >
+                    <Bookmark size={16} className="text-primary shrink-0" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{s.lesson.title}</p>
+                      <p className="truncate text-xs text-muted-foreground">{s.course.title}</p>
+                    </div>
+                  </Link>
+                </li>
+              ))}
             </ul>
           ) : (
             <p className="text-sm text-muted-foreground">Save lessons from the course player to revise later.</p>
@@ -172,11 +140,11 @@ export default function StudentDashboard() {
         >
           {purchases.length ? (
             <ul className="divide-y divide-border">
-              {purchases.slice(0, 4).map((p) => (
+              {purchases.map((p) => (
                 <li key={p.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
                   <div className="flex items-center gap-3 min-w-0">
                     <Receipt size={16} className="text-muted-foreground shrink-0" />
-                    <span className="truncate">{getCourse(db, p.courseId)?.title}</span>
+                    <span className="truncate">{p.course.title}</span>
                   </div>
                   <span className="shrink-0 text-muted-foreground">{formatDate(p.createdAt)}</span>
                   <b className="shrink-0">{formatBDT(p.amountPaid)}</b>

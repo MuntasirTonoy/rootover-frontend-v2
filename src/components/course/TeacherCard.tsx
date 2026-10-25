@@ -3,25 +3,11 @@
 import Link from "next/link";
 import { BadgeCheck, BookOpen, Star, Users } from "lucide-react";
 import { Avatar } from "@/components/ui/primitives";
-import { useApp } from "@/context/AppStore";
-import { catalogCourses, type TeacherWithUser } from "@/lib/selectors";
+import type { TeacherPublic } from "@/lib/api-types";
 
-// Teacher summary with stats derived from their published courses
-export function useTeacherStats(teacherId: string) {
-  const { db } = useApp();
-  const courses = catalogCourses(db).filter((c) => c.teacherId === teacherId);
-  const students = new Set(
-    db.enrollments.filter((e) => courses.some((c) => c.id === e.courseId)).map((e) => e.studentId),
-  ).size;
-  const reviews = courses.flatMap((c) => c.reviews);
-  const rating = reviews.length
-    ? Math.round((reviews.reduce((s, r) => s + r.rating, 0) / reviews.length) * 10) / 10
-    : 0;
-  return { courses, students, rating, reviewCount: reviews.length };
-}
-
-export default function TeacherCard({ teacher, compact }: { teacher: TeacherWithUser; compact?: boolean }) {
-  const stats = useTeacherStats(teacher.id);
+// Teacher summary; stats cover their published courses (computed by the API)
+export default function TeacherCard({ teacher, compact }: { teacher: TeacherPublic; compact?: boolean }) {
+  const { stats } = teacher;
 
   return (
     <Link
@@ -44,7 +30,7 @@ export default function TeacherCard({ teacher, compact }: { teacher: TeacherWith
       <div className="mt-4 grid grid-cols-3 gap-2 border-t border-border pt-3 text-center text-xs text-muted-foreground">
         <span className="flex flex-col items-center gap-0.5">
           <BookOpen size={14} />
-          <b className="text-foreground">{stats.courses.length}</b> courses
+          <b className="text-foreground">{stats.courses}</b> courses
         </span>
         <span className="flex flex-col items-center gap-0.5">
           <Users size={14} />

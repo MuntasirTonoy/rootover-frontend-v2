@@ -5,27 +5,22 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Bookmark, BookmarkX, Clock, Play } from "lucide-react";
 import CourseThumb from "@/components/course/CourseThumb";
+import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import { EmptyBlock, FilterSelect, PageHeader, SearchInput } from "@/components/ui/primitives";
-import { useApp } from "@/context/AppStore";
+import { api, errorMessage } from "@/lib/api";
+import type { SavedLessonView } from "@/lib/api-types";
 import { formatDate, formatDuration } from "@/lib/format";
-import { findLesson, getCourse, teacherInfo } from "@/lib/selectors";
+import { useApi } from "@/lib/use-api";
 import { btn } from "@/lib/ui";
 
 export default function SavedVideosPage() {
-  const { db, user, toggleSaved } = useApp();
+  const list = useApi<SavedLessonView[]>("/me/saved-lessons");
   const [query, setQuery] = useState("");
   const [courseFilter, setCourseFilter] = useState("");
 
-  const saved = db.savedLessons
-    .filter((s) => s.studentId === user!.id)
-    .sort((a, b) => b.savedAt.localeCompare(a.savedAt))
-    .flatMap((s) => {
-      const course = getCourse(db, s.courseId);
-      const found = course && findLesson(course, s.lessonId);
-      return course && found
-        ? [{ saved: s, course, ...found, teacher: teacherInfo(db, course.teacherId) }]
-        : [];
-    });
+  if (!ready(list)) return <ApiStatus state={list} />;
+  // Newest first; lessons deleted from their course are already left out
+  const saved = list.data;
 
   const courseOptions = [...new Map(saved.map((s) => [s.course.id, s.course.title])).entries()];
   const q = query.trim().toLowerCase();
@@ -33,14 +28,19 @@ export default function SavedVideosPage() {
     (s) =>
       (!courseFilter || s.course.id === courseFilter) &&
       (!q ||
-        [s.lesson.title, s.chapterTitle, s.course.title, s.teacher?.name ?? ""].some((t) =>
+        [s.lesson.title, s.chapter.title, s.course.title, s.teacher.name].some((t) =>
           t.toLowerCase().includes(q),
         )),
   );
 
-  const remove = (courseId: string, lessonId: string) => {
-    toggleSaved(courseId, lessonId);
-    toast.success("Removed from saved videos");
+  const remove = async (lessonId: string) => {
+    try {
+      await api(`/me/saved-lessons/${lessonId}`, { method: "DELETE" });
+      list.setData((prev) => (prev ?? []).filter((s) => s.lesson.id !== lessonId));
+      toast.success("Removed from saved videos");
+    } catch (err) {
+      toast.error(errorMessage(err));
+    }
   };
 
   return (
@@ -77,7 +77,8 @@ export default function SavedVideosPage() {
             <EmptyBlock title="No saved lessons match" description="Try a different search or course." />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-              {visible.map(({ saved: s, course, lesson, chapterTitle, chapterIndex, teacher }) => {
+              {visible.map((s) => {
+                const { course, lesson, teacher } = s;
                 const href = `/learn/${course.id}?lesson=${lesson.id}`;
                 return (
                   <article key={s.id} className="flex flex-col overflow-hidden rounded-lg border border-border bg-card">
@@ -94,11 +95,11 @@ export default function SavedVideosPage() {
                     </Link>
                     <div className="flex flex-1 flex-col p-4">
                       <p className="text-xs font-semibold text-primary truncate">
-                        Chapter {chapterIndex + 1}: {chapterTitle}
+                        Chapter {s.chapter.index + 1}: {s.chapter.title}
                       </p>
                       <h3 className="mt-0.5 font-bold text-foreground line-clamp-2">{lesson.title}</h3>
                       <p className="mt-1 text-sm text-muted-foreground truncate">{course.title}</p>
-                      <p className="text-xs text-muted-foreground truncate">{teacher?.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{teacher.name}</p>
                       <p className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
                         <Clock size={12} /> Saved {formatDate(s.savedAt)}
                       </p>
@@ -107,7 +108,7 @@ export default function SavedVideosPage() {
                           <Play size={15} /> Watch video
                         </Link>
                         <button
-                          onClick={() => remove(course.id, lesson.id)}
+                          onClick={() => remove(lesson.id)}
                           className={btn.secondary}
                           aria-label={`Remove ${lesson.title} from saved`}
                           title="Remove from saved"

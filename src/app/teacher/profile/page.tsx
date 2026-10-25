@@ -3,17 +3,21 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Eye, Plus, Save, X } from "lucide-react";
+import { Eye, Loader2, Plus, Save, X } from "lucide-react";
 import { DocPreview } from "@/components/ui/FileInput";
 import { Avatar, Field, PageHeader, Section, StatusBadge } from "@/components/ui/primitives";
-import { formatDate, maskNumber } from "@/lib/format";
-import { latestApplication } from "@/lib/selectors";
+import { useApp } from "@/context/AppStore";
+import { api, ApiError, errorMessage } from "@/lib/api";
+import { formatDate } from "@/lib/format";
 import { btn, field } from "@/lib/ui";
 import { useTeacher } from "@/lib/use-teacher";
 
 export default function TeacherProfilePage() {
-  const { db, user, teacher, updateTeacherProfile } = useTeacher();
-  const application = latestApplication(db, user!.id);
+  const { user } = useApp();
+  // The application's identity numbers arrive masked from the API
+  const { teacher, application, reload } = useTeacher();
+  const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
     headline: teacher.headline,
     bio: teacher.bio,
@@ -22,14 +26,21 @@ export default function TeacherProfilePage() {
     qualifications: teacher.qualifications.length ? teacher.qualifications : [""],
   });
 
-  const save = (e: FormEvent) => {
+  // The API trims, drops empty qualifications and defaults an empty headline
+  const save = async (e: FormEvent) => {
     e.preventDefault();
-    updateTeacherProfile(teacher.id, {
-      ...form,
-      headline: form.headline.trim() || "Teacher on Root Over",
-      qualifications: form.qualifications.map((q) => q.trim()).filter(Boolean),
-    });
-    toast.success("Teacher profile saved");
+    setSaving(true);
+    try {
+      await api("/teacher/me", { method: "PATCH", body: form });
+      setErrors({});
+      reload();
+      toast.success("Teacher profile saved");
+    } catch (err) {
+      if (err instanceof ApiError && err.fields) setErrors(err.fields);
+      toast.error(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -59,17 +70,17 @@ export default function TeacherProfilePage() {
               </p>
             </div>
           </div>
-          <Field label="Headline" htmlFor="headline">
+          <Field label="Headline" htmlFor="headline" error={errors.headline}>
             <input id="headline" value={form.headline} onChange={(e) => setForm({ ...form, headline: e.target.value })} className={field} />
           </Field>
-          <Field label="Bio" htmlFor="bio">
+          <Field label="Bio" htmlFor="bio" error={errors.bio}>
             <textarea id="bio" rows={4} value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} className={field} />
           </Field>
           <div className="grid sm:grid-cols-2 gap-5">
             <Field label="Institution" htmlFor="institution">
               <input id="institution" value={form.institution} onChange={(e) => setForm({ ...form, institution: e.target.value })} className={field} />
             </Field>
-            <Field label="Years of experience" htmlFor="experience">
+            <Field label="Years of experience" htmlFor="experience" error={errors.experienceYears}>
               <input
                 id="experience"
                 type="number"
@@ -114,8 +125,8 @@ export default function TeacherProfilePage() {
             </button>
           </div>
           <div className="flex justify-end">
-            <button type="submit" className={btn.primary}>
-              <Save size={16} /> Save profile
+            <button type="submit" disabled={saving} className={btn.primary}>
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Save profile
             </button>
           </div>
         </form>
@@ -140,15 +151,15 @@ export default function TeacherProfilePage() {
                 </div>
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted-foreground">NID</dt>
-                  <dd className="font-mono">{maskNumber(application.nid)}</dd>
+                  <dd className="font-mono">{application.nid}</dd>
                 </div>
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted-foreground">bKash</dt>
-                  <dd className="font-mono">{maskNumber(application.bkashNumber)}</dd>
+                  <dd className="font-mono">{application.bkashNumber}</dd>
                 </div>
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted-foreground">TIN</dt>
-                  <dd className="font-mono">{maskNumber(application.tin)}</dd>
+                  <dd className="font-mono">{application.tin}</dd>
                 </div>
               </>
             )}

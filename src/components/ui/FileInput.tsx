@@ -84,17 +84,18 @@ export default function FileInput({ label, accept, value, onChange, error, hint 
 
 export function DocPreview({ doc, large }: { doc: UploadedDoc; large?: boolean }) {
   const size = large ? "w-full h-48" : "w-12 h-12";
-  if (doc.type.startsWith("image/") && doc.dataUrl) {
-    return <img src={doc.dataUrl} alt={doc.name} className={`${size} rounded-md object-cover bg-background`} />;
+  const src = doc.url ?? doc.dataUrl;
+  if (doc.type.startsWith("image/") && src) {
+    return <img src={src} alt={doc.name} className={`${size} rounded-md object-cover bg-background`} />;
   }
   const content = (
     <div className={`${size} rounded-md bg-background border border-border flex flex-col items-center justify-center gap-1 text-muted-foreground`}>
       <FileText size={large ? 32 : 20} />
-      {large && <span className="text-xs">{doc.dataUrl ? "Open document" : "Demo document (no file)"}</span>}
+      {large && <span className="text-xs">{src ? "Open document" : "Demo document (no file)"}</span>}
     </div>
   );
-  return doc.dataUrl && large ? (
-    <a href={doc.dataUrl} target="_blank" rel="noopener noreferrer" className="block hover:opacity-80">
+  return src && large ? (
+    <a href={src} target="_blank" rel="noopener noreferrer" className="block hover:opacity-80">
       {content}
     </a>
   ) : (

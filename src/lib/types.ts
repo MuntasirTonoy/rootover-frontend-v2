@@ -12,8 +12,8 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  // Demo only - plain-text so the mock login can check it
-  password: string;
+  // Seed data only (the demo logins); signed-in users come from the API without it
+  password?: string;
   role: Role;
   status: UserStatus;
   avatar?: string;
@@ -43,11 +43,13 @@ export type ApplicationStatus =
   | "approved"
   | "rejected";
 
-// A locally previewed file; dataUrl is only kept when small enough for localStorage
+// An attached file: from the API it has a url (once uploads exist); the mock
+// keeps a local dataUrl preview when small enough for localStorage
 export interface UploadedDoc {
   name: string;
   type: string;
   size: number;
+  url?: string;
   dataUrl?: string;
 }
 

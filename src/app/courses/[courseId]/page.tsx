@@ -8,22 +8,11 @@ import CurriculumList from "@/components/course/CurriculumList";
 import TeacherCard from "@/components/course/TeacherCard";
 import LoadingAnimation from "@/components/LoadingAnimation";
 import { Badge, courseStatusLabel, EmptyBlock, Stars, StatusBadge } from "@/components/ui/primitives";
+import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import { useApp } from "@/context/AppStore";
+import type { CourseDetail } from "@/lib/api-types";
 import { formatBDT, formatDate, formatDuration } from "@/lib/format";
-import { discountPercent, quote } from "@/lib/pricing";
-import {
-  catalogCourses,
-  courseDuration,
-  courseRating,
-  courseStudentCount,
-  enrollmentFor,
-  getCourse,
-  lessonAccess,
-  lessonCount,
-  progressOf,
-  resumeLesson,
-  teacherInfo,
-} from "@/lib/selectors";
+import { useApi } from "@/lib/use-api";
 import { btn } from "@/lib/ui";
 
 interface CoursePageProps {
@@ -46,13 +35,15 @@ export default function CourseDetailsPage({ params }: CoursePageProps) {
 
 function CourseDetails({ params }: CoursePageProps) {
   const { courseId } = use(params);
-  const { db, user } = useApp();
-  const course = getCourse(db, courseId);
-  const published = !!course && catalogCourses(db).some((c) => c.id === course.id);
-  const access = course ? lessonAccess(db, course, user) : null;
-  const canPreviewUnpublished = !!access && (access.owner || user?.role === "admin");
+  const { user } = useApp();
+  // The API decides visibility (unpublished courses are 404 except to their
+  // owner and admins) and leaves out the links of lessons the viewer can't watch
+  const detail = useApi<CourseDetail>(`/courses/${courseId}`);
 
-  if (!course || (!published && !canPreviewUnpublished)) {
+  if (!ready(detail) && detail.error?.status !== 404) return <ApiStatus state={detail} className="min-h-[60vh]" />;
+  const course = detail.data;
+
+  if (!course) {
     return (
       <div className="container-custom py-16">
         <EmptyBlock
@@ -69,13 +60,7 @@ function CourseDetails({ params }: CoursePageProps) {
     );
   }
 
-  const teacher = teacherInfo(db, course.teacherId);
-  const rating = courseRating(course);
-  const price = quote(course);
-  const off = discountPercent(course);
-  const enrollment = user ? enrollmentFor(db, user.id, course.id) : undefined;
-  const progress = progressOf(course, enrollment);
-  const resume = resumeLesson(course, enrollment);
+  const { teacher, rating, published, access, enrollment } = course;
   const previewLesson = course.chapters.flatMap((c) => c.lessons).find((l) => l.isPreview);
 
   return (
@@ -110,26 +95,24 @@ function CourseDetails({ params }: CoursePageProps) {
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
               <Stars rating={rating.average} count={rating.count} />
               <span className="flex items-center gap-1.5">
-                <Users size={15} /> {courseStudentCount(db, course.id)} students
+                <Users size={15} /> {course.studentCount} students
               </span>
               <span className="flex items-center gap-1.5">
-                <Layers size={15} /> {course.chapters.length} chapters
+                <Layers size={15} /> {course.chapterCount} chapters
               </span>
               <span className="flex items-center gap-1.5">
-                <PlayCircle size={15} /> {lessonCount(course)} lessons
+                <PlayCircle size={15} /> {course.lessonCount} lessons
               </span>
               <span className="flex items-center gap-1.5">
-                <Clock size={15} /> {formatDuration(courseDuration(course))}
+                <Clock size={15} /> {formatDuration(course.durationMin)}
               </span>
             </div>
-            {teacher && (
-              <p className="mt-4 text-sm">
-                Taught by{" "}
-                <Link href={`/teachers/${teacher.id}`} className="font-bold text-primary hover:underline">
-                  {teacher.name}
-                </Link>
-              </p>
-            )}
+            <p className="mt-4 text-sm">
+              Taught by{" "}
+              <Link href={`/teachers/${teacher.id}`} className="font-bold text-primary hover:underline">
+                {teacher.name}
+              </Link>
+            </p>
           </div>
 
           {/* Price card */}
@@ -142,25 +125,25 @@ function CourseDetails({ params }: CoursePageProps) {
                     <div>
                       <p className="text-sm font-bold text-foreground">You own this course</p>
                       <p className="text-xs text-muted-foreground">
-                        {progress.completed}/{progress.total} lessons completed ({progress.percent}%)
+                        {enrollment.progress.completed}/{enrollment.progress.total} lessons completed ({enrollment.progress.percent}%)
                       </p>
                     </div>
-                    <Link href={`/learn/${course.id}${resume ? `?lesson=${resume.id}` : ""}`} className={`${btn.primary} w-full py-3`}>
+                    <Link href={`/learn/${course.id}${enrollment.resumeLessonId ? `?lesson=${enrollment.resumeLessonId}` : ""}`} className={`${btn.primary} w-full py-3`}>
                       Continue learning
                     </Link>
                   </>
-                ) : access?.owner ? (
+                ) : access.owner ? (
                   <Link href={`/teacher/courses/${course.id}/edit`} className={`${btn.primary} w-full py-3`}>
                     <Pencil size={16} /> Edit this course
                   </Link>
                 ) : (
                   <>
                     <div className="flex items-baseline gap-2">
-                      <span className="text-3xl font-extrabold text-foreground">{formatBDT(price.coursePrice)}</span>
-                      {price.courseDiscount > 0 && (
+                      <span className="text-3xl font-extrabold text-foreground">{formatBDT(course.effectivePrice)}</span>
+                      {course.discountPercent > 0 && (
                         <>
-                          <span className="text-muted-foreground line-through">{formatBDT(price.listPrice)}</span>
-                          <Badge tone="red">{off}% OFF</Badge>
+                          <span className="text-muted-foreground line-through">{formatBDT(course.price)}</span>
+                          <Badge tone="red">{course.discountPercent}% OFF</Badge>
                         </>
                       )}
                     </div>
@@ -211,34 +194,32 @@ function CourseDetails({ params }: CoursePageProps) {
           <section>
             <h2 className="text-lg font-bold mb-1">Course curriculum</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              {course.chapters.length} chapters · {lessonCount(course)} lessons ·{" "}
-              {formatDuration(courseDuration(course))} total
+              {course.chapterCount} chapters · {course.lessonCount} lessons ·{" "}
+              {formatDuration(course.durationMin)} total
             </p>
-            <CurriculumList chapters={course.chapters} courseId={course.id} canWatch={access?.canWatch} />
+            <CurriculumList chapters={course.chapters} courseId={course.id} canWatch={(lesson) => lesson.canWatch} />
           </section>
 
-          {teacher && (
-            <section>
-              <h2 className="text-lg font-bold mb-4">About the teacher</h2>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <TeacherCard teacher={teacher} />
-                <div className="rounded-lg border border-border p-5 text-sm">
-                  {teacher.bio && <p className="text-muted-foreground mb-3">{teacher.bio}</p>}
-                  {teacher.qualifications.length > 0 && (
-                    <>
-                      <p className="font-bold text-foreground mb-1">Qualifications</p>
-                      <ul className="list-disc pl-5 text-muted-foreground space-y-0.5">
-                        {teacher.qualifications.map((q) => (
-                          <li key={q}>{q}</li>
-                        ))}
-                      </ul>
-                    </>
-                  )}
-                  <p className="mt-3 text-muted-foreground">{teacher.experienceYears} years of teaching experience</p>
-                </div>
+          <section>
+            <h2 className="text-lg font-bold mb-4">About the teacher</h2>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <TeacherCard teacher={teacher} />
+              <div className="rounded-lg border border-border p-5 text-sm">
+                {teacher.bio && <p className="text-muted-foreground mb-3">{teacher.bio}</p>}
+                {teacher.qualifications.length > 0 && (
+                  <>
+                    <p className="font-bold text-foreground mb-1">Qualifications</p>
+                    <ul className="list-disc pl-5 text-muted-foreground space-y-0.5">
+                      {teacher.qualifications.map((q) => (
+                        <li key={q}>{q}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                <p className="mt-3 text-muted-foreground">{teacher.experienceYears} years of teaching experience</p>
               </div>
-            </section>
-          )}
+            </div>
+          </section>
 
           <section>
             <h2 className="text-lg font-bold mb-1">Student reviews</h2>

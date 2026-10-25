@@ -3,37 +3,23 @@
 import Link from "next/link";
 import { BadgeCheck, BookOpen, Coins, Hourglass, Plus, Receipt, Users, Wallet } from "lucide-react";
 import ReportsAlert from "@/components/dashboard/ReportsAlert";
+import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import DataTable from "@/components/ui/DataTable";
-import { reportCounts } from "@/lib/reports";
 import SalesChart from "@/components/ui/SalesChart";
 import { Avatar, PageHeader, Section, StatCard, Stars, StatusBadge, courseStatusLabel } from "@/components/ui/primitives";
 import { formatBDT, formatDate } from "@/lib/format";
 import { CLEARING_DAYS } from "@/lib/pricing";
-import {
-  courseRating,
-  courseStudentCount,
-  getCourse,
-  getUser,
-  latestApplication,
-  monthlySeries,
-  salesTotals,
-  teacherFinance,
-} from "@/lib/selectors";
-import type { Course } from "@/lib/types";
+import type { TeacherDashboard as Dashboard } from "@/lib/api-types";
+import { useApi } from "@/lib/use-api";
 import { btn } from "@/lib/ui";
 import { useTeacher } from "@/lib/use-teacher";
 
 export default function TeacherDashboard() {
-  const { db, user, teacher, courses } = useTeacher();
-  const finance = teacherFinance(db, teacher.id);
-  const purchases = db.purchases.filter((p) => p.teacherId === teacher.id);
-  const students = new Set(purchases.filter((p) => p.status === "completed").map((p) => p.studentId)).size;
-  const recent = purchases
-    .filter((p) => p.status === "completed")
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 6);
-  const application = latestApplication(db, user!.id);
-  const counts = (s: Course["status"]) => courses.filter((c) => c.status === s).length;
+  const { teacher, application } = useTeacher();
+  const dashboard = useApi<Dashboard>("/teacher/dashboard");
+  if (!ready(dashboard)) return <ApiStatus state={dashboard} />;
+  // Every figure is computed by the API (money, counts, the 6-month chart)
+  const { counts, students, finance, monthly, coursePerformance, recentEnrollments: recent, reports } = dashboard.data;
 
   return (
     <div className="space-y-6">
@@ -48,7 +34,7 @@ export default function TeacherDashboard() {
       />
 
       <ReportsAlert
-        count={reportCounts(db.videoReports.filter((r) => r.teacherId === teacher.id)).needsFix}
+        count={reports.needsFix}
         href="/teacher/reports"
         text="reported video(s) need your fix"
       />
@@ -56,9 +42,9 @@ export default function TeacherDashboard() {
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard
           label="Total courses"
-          value={courses.length}
+          value={counts.total}
           icon={BookOpen}
-          hint={`${counts("approved")} live · ${counts("pending")} pending · ${counts("draft")} draft`}
+          hint={`${counts.approved} live · ${counts.pending} pending · ${counts.draft} draft`}
         />
         <StatCard label="Students" value={students} icon={Users} hint={`${finance.sales} completed sales`} />
         <StatCard label="Gross sales" value={formatBDT(finance.gross)} icon={Receipt} hint="What students paid" />
@@ -68,7 +54,7 @@ export default function TeacherDashboard() {
       <div className="grid lg:grid-cols-3 gap-6">
         <Section title="Revenue (last 6 months)" className="lg:col-span-2">
           <SalesChart
-            data={monthlySeries(purchases)}
+            data={monthly}
             series={[
               { key: "gross", label: "Gross sales", color: "#00c853" },
               { key: "net", label: "Your earnings", color: "#2563eb" },
@@ -121,25 +107,25 @@ export default function TeacherDashboard() {
       </div>
 
       <Section title="Course performance">
-        <DataTable<Course>
-          rows={courses.filter((c) => c.status !== "draft")}
-          rowKey={(c) => c.id}
+        <DataTable<Dashboard["coursePerformance"][number]>
+          rows={coursePerformance}
+          rowKey={(c) => c.course.id}
           pageSize={5}
           emptyTitle="No submitted courses yet"
           columns={[
             {
               header: "Course",
               cell: (c) => (
-                <Link href={`/teacher/courses/${c.id}/edit`} className="font-semibold hover:text-primary">
-                  {c.title}
+                <Link href={`/teacher/courses/${c.course.id}/edit`} className="font-semibold hover:text-primary">
+                  {c.course.title}
                 </Link>
               ),
             },
             { header: "Status", cell: (c) => <StatusBadge status={c.status} label={courseStatusLabel(c.status)} /> },
-            { header: "Students", cell: (c) => courseStudentCount(db, c.id) },
-            { header: "Gross", cell: (c) => formatBDT(salesTotals(purchases.filter((p) => p.courseId === c.id)).gross) },
-            { header: "Net", cell: (c) => formatBDT(salesTotals(purchases.filter((p) => p.courseId === c.id)).teacherNet) },
-            { header: "Rating", cell: (c) => <Stars rating={courseRating(c).average} count={courseRating(c).count} /> },
+            { header: "Students", cell: (c) => c.students },
+            { header: "Gross", cell: (c) => formatBDT(c.gross) },
+            { header: "Net", cell: (c) => formatBDT(c.net) },
+            { header: "Rating", cell: (c) => <Stars rating={c.rating.average} count={c.rating.count} /> },
           ]}
         />
       </Section>
@@ -156,20 +142,17 @@ export default function TeacherDashboard() {
         >
           {recent.length ? (
             <ul className="divide-y divide-border">
-              {recent.map((p) => {
-                const student = getUser(db, p.studentId);
-                return (
-                  <li key={p.id} className="flex items-center gap-3 py-2.5 text-sm">
-                    <Avatar name={student?.name ?? "?"} src={student?.avatar} size="w-8 h-8" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold">{student?.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">{getCourse(db, p.courseId)?.title}</p>
-                    </div>
-                    <span className="text-xs text-muted-foreground shrink-0">{formatDate(p.createdAt)}</span>
-                    <b className="shrink-0">{formatBDT(p.teacherNet)}</b>
-                  </li>
-                );
-              })}
+              {recent.map((p) => (
+                <li key={p.purchaseId} className="flex items-center gap-3 py-2.5 text-sm">
+                  <Avatar name={p.student.name} src={p.student.avatar} size="w-8 h-8" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold">{p.student.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">{p.course.title}</p>
+                  </div>
+                  <span className="text-xs text-muted-foreground shrink-0">{formatDate(p.createdAt)}</span>
+                  <b className="shrink-0">{formatBDT(p.teacherNet)}</b>
+                </li>
+              ))}
             </ul>
           ) : (
             <p className="text-sm text-muted-foreground">No enrollments yet.</p>

@@ -4,17 +4,30 @@ import Link from "next/link";
 import { useState } from "react";
 import { ChevronDown, Lock, PlayCircle } from "lucide-react";
 import { formatDuration } from "@/lib/format";
-import type { Chapter, Lesson } from "@/lib/types";
 
-interface CurriculumListProps {
-  chapters: Chapter[];
+// The fields shown here; fits both the API (LessonPublic) and the mock courses
+interface ListLesson {
+  id: string;
+  title: string;
+  durationMin: number;
+  isPreview: boolean;
+}
+
+interface ListChapter<L extends ListLesson> {
+  id: string;
+  title: string;
+  lessons: L[];
+}
+
+interface CurriculumListProps<L extends ListLesson> {
+  chapters: ListChapter<L>[];
   // When given, previewable lessons link into the player
   courseId?: string;
-  canWatch?: (lesson: Lesson) => boolean;
+  canWatch?: (lesson: L) => boolean;
 }
 
 // Read-only chapter/lesson accordion for course pages and the wizard review step
-export default function CurriculumList({ chapters, courseId, canWatch }: CurriculumListProps) {
+export default function CurriculumList<L extends ListLesson>({ chapters, courseId, canWatch }: CurriculumListProps<L>) {
   const [open, setOpen] = useState<Record<string, boolean>>(() =>
     chapters[0] ? { [chapters[0].id]: true } : {},
   );

@@ -4,20 +4,13 @@ import Link from "next/link";
 import { BookOpen, Star, Users } from "lucide-react";
 import CourseThumb from "@/components/course/CourseThumb";
 import { Badge, Stars } from "@/components/ui/primitives";
-import { useApp } from "@/context/AppStore";
 import { formatBDT } from "@/lib/format";
-import { coursePrice, discountPercent } from "@/lib/pricing";
-import { courseRating, courseStudentCount, lessonCount, teacherInfo } from "@/lib/selectors";
-import type { Course } from "@/lib/types";
+import type { CourseSummary } from "@/lib/api-types";
 
 // Phones show these two per row, so below `sm` the card switches to a compact
 // layout: taller thumbnail, short rating, no stats row, price pinned to the bottom.
-export default function CourseCard({ course }: { course: Course }) {
-  const { db } = useApp();
-  const teacher = teacherInfo(db, course.teacherId);
-  const rating = courseRating(course);
-  const price = coursePrice(course);
-  const off = discountPercent(course);
+export default function CourseCard({ course }: { course: CourseSummary }) {
+  const { rating, effectivePrice: price, discountPercent: off } = course;
 
   return (
     <Link
@@ -42,7 +35,7 @@ export default function CourseCard({ course }: { course: Course }) {
           {course.title}
         </h3>
         <p className="mt-0.5 sm:mt-1 text-[11px] sm:text-sm text-muted-foreground truncate">
-          {teacher?.name ?? "Unknown teacher"}
+          {course.teacher.name}
         </p>
 
         {/* Compact rating on phones, full stars from sm up */}
@@ -61,10 +54,10 @@ export default function CourseCard({ course }: { course: Course }) {
         </div>
         <div className="hidden sm:flex mt-2 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span className="flex items-center gap-1">
-            <BookOpen size={13} /> {lessonCount(course)} lessons
+            <BookOpen size={13} /> {course.lessonCount} lessons
           </span>
           <span className="flex items-center gap-1">
-            <Users size={13} /> {courseStudentCount(db, course.id)} students
+            <Users size={13} /> {course.studentCount} students
           </span>
         </div>
 

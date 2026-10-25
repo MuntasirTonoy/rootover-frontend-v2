@@ -3,23 +3,13 @@ import { CheckCircle2, Clock, PlayCircle } from "lucide-react";
 import CourseThumb from "./CourseThumb";
 import { Badge } from "@/components/ui/primitives";
 import { formatDate } from "@/lib/format";
-import { findLesson, progressOf, resumeLesson } from "@/lib/selectors";
-import type { Course, Enrollment } from "@/lib/types";
+import type { EnrolledCourse } from "@/lib/api-types";
 
 // A purchased course with progress and a "Continue learning" action. Phones show
 // these two per row, so progress moves onto the thumbnail and the body is compact.
-export default function EnrolledCourseCard({
-  course,
-  enrollment,
-  teacherName,
-}: {
-  course: Course;
-  enrollment: Enrollment;
-  teacherName?: string;
-}) {
-  const progress = progressOf(course, enrollment);
-  const resume = resumeLesson(course, enrollment);
-  const last = enrollment.lastLessonId ? findLesson(course, enrollment.lastLessonId) : undefined;
+export default function EnrolledCourseCard({ item, showTeacher }: { item: EnrolledCourse; showTeacher?: boolean }) {
+  const { course, enrollment, progress, resumeLessonId: resume, lastLesson: last } = item;
+  const teacherName = showTeacher ? course.teacher.name : undefined;
   const done = progress.percent === 100;
   const started = progress.completed > 0;
   const [shortLabel, label] = done
@@ -57,7 +47,7 @@ export default function EnrolledCourseCard({
           <Clock size={13} className="shrink-0 mt-0.5" />
           {last && enrollment.lastWatchedAt ? (
             <span>
-              Last watched <b className="text-foreground">{last.lesson.title}</b> on {formatDate(enrollment.lastWatchedAt)}
+              Last watched <b className="text-foreground">{last.title}</b> on {formatDate(enrollment.lastWatchedAt)}
             </span>
           ) : (
             <span>Not started yet</span>
@@ -66,7 +56,7 @@ export default function EnrolledCourseCard({
 
         <div className="mt-auto pt-2.5 sm:pt-4">
           <Link
-            href={`/learn/${course.id}${resume ? `?lesson=${resume.id}` : ""}`}
+            href={`/learn/${course.id}${resume ? `?lesson=${resume}` : ""}`}
             className="flex w-full items-center justify-center gap-1.5 rounded-md bg-primary px-2 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm font-bold text-primary-foreground hover:bg-primary-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           >
             <PlayCircle size={15} />

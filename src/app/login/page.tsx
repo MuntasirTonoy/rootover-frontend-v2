@@ -17,6 +17,7 @@ import {
   User,
 } from "lucide-react";
 import { useApp } from "@/context/AppStore";
+import { ApiError, errorMessage } from "@/lib/api";
 import { DEMO_ACCOUNTS } from "@/lib/seed";
 import { dashboardPath } from "@/lib/selectors";
 import type { Role, User as AppUser } from "@/lib/types";
@@ -48,6 +49,7 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState<Role | null>(null);
 
   // Demo sign-ins always land on the role's dashboard; normal sign-ins honour ?redirect
   const finish = (user: AppUser, useRedirect: boolean) => {
@@ -59,20 +61,27 @@ function LoginForm() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 400));
     try {
-      finish(login(email, password), true);
+      finish(await login(email, password), true);
     } catch (err) {
-      setError((err as Error).message);
+      // Accounts must confirm their sign-up code first
+      if (err instanceof ApiError && err.code === "EMAIL_NOT_VERIFIED") {
+        toast.info("Enter the code we emailed you to finish signing up.");
+        router.push(`/register?verify=${encodeURIComponent(email.trim())}`);
+        return;
+      }
+      setError(errorMessage(err));
       setLoading(false);
     }
   };
 
-  const handleDemo = (role: Role) => {
+  const handleDemo = async (role: Role) => {
+    setDemoLoading(role);
     try {
-      finish(loginAs(role), false);
+      finish(await loginAs(role), false);
     } catch (err) {
-      toast.error((err as Error).message);
+      toast.error(errorMessage(err));
+      setDemoLoading(null);
     }
   };
 
@@ -154,8 +163,8 @@ function LoginForm() {
         <div className="rounded-lg border-2 border-dashed border-primary/40 bg-primary/5 p-6 md:p-8">
           <h2 className="text-lg font-extrabold text-foreground">Demo login</h2>
           <p className="text-sm text-muted-foreground mb-5">
-            One click to explore each role. These fictional accounts are for UI preview only. Authentication
-            here is simulated in the browser and is not secure.
+            One click to explore each role. These fictional accounts come from the demo server&apos;s seed
+            data; payments everywhere are simulated.
           </p>
           <div className="space-y-3">
             {DEMO_ACCOUNTS.map((account) => {
@@ -173,7 +182,12 @@ function LoginForm() {
                         <p className="text-muted-foreground font-mono">{account.password}</p>
                       </div>
                     </div>
-                    <button onClick={() => handleDemo(account.role)} className={`${btn.primary} shrink-0`}>
+                    <button
+                      onClick={() => handleDemo(account.role)}
+                      disabled={demoLoading !== null}
+                      className={`${btn.primary} shrink-0`}
+                    >
+                      {demoLoading === account.role && <Loader2 className="animate-spin" size={16} />}
                       Login as {account.label}
                     </button>
                   </div>
@@ -181,8 +195,9 @@ function LoginForm() {
               );
             })}
           </div>
+          {/* Only affects the screens that still run on browser demo data (admin, video reports) */}
           <button onClick={resetDemo} className={`${btn.ghost} mt-5`}>
-            <RotateCcw size={14} /> Reset demo data
+            <RotateCcw size={14} /> Reset browser demo data
           </button>
         </div>
       </div>

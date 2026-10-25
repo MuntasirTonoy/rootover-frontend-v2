@@ -4,17 +4,15 @@ import Link from "next/link";
 import { Play, Sparkles } from "lucide-react";
 import CourseThumb from "@/components/course/CourseThumb";
 import EmptyState from "@/components/EmptyState";
-import { useApp } from "@/context/AppStore";
+import ApiStatus, { ready } from "@/components/ui/ApiStatus";
+import type { FreePreview } from "@/lib/api-types";
 import { formatDuration } from "@/lib/format";
-import { catalogCourses, flattenLessons, teacherInfo } from "@/lib/selectors";
+import { useApi } from "@/lib/use-api";
 
 export default function FreeTrialPage() {
-  const { db } = useApp();
-  const previews = catalogCourses(db).flatMap((course) =>
-    flattenLessons(course)
-      .filter((f) => f.lesson.isPreview)
-      .map((f) => ({ course, ...f })),
-  );
+  // Preview lessons of published courses, most popular courses first
+  const list = useApi<FreePreview[]>("/free-previews");
+  const previews = list.data ?? [];
 
   return (
     <div className="container-custom py-12 md:py-16">
@@ -29,7 +27,9 @@ export default function FreeTrialPage() {
         </p>
       </header>
 
-      {previews.length > 0 ? (
+      {!ready(list) ? (
+        <ApiStatus state={list} />
+      ) : previews.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {previews.map(({ course, lesson, chapterTitle }) => (
             <Link
@@ -53,7 +53,7 @@ export default function FreeTrialPage() {
                 <h3 className="font-bold text-foreground group-hover:text-primary line-clamp-2">{lesson.title}</h3>
                 <p className="mt-1 text-sm text-muted-foreground truncate">{course.title}</p>
                 <p className="text-xs text-muted-foreground">
-                  {teacherInfo(db, course.teacherId)?.name} · {formatDuration(lesson.durationMin)}
+                  {course.teacher.name} · {formatDuration(lesson.durationMin)}
                 </p>
               </div>
             </Link>

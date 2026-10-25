@@ -3,30 +3,35 @@
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Pencil, Plus, Trash2 } from "lucide-react";
+import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import DataTable from "@/components/ui/DataTable";
 import Modal from "@/components/ui/Modal";
 import { Field, PageHeader, StatusBadge } from "@/components/ui/primitives";
+import { api, ApiError, errorMessage } from "@/lib/api";
+import type { CouponView, TeacherCourseRow } from "@/lib/api-types";
 import { confirmAction } from "@/lib/confirm";
-import { formatBDT, formatDate, uid } from "@/lib/format";
+import { formatBDT, formatDate } from "@/lib/format";
 import type { Coupon } from "@/lib/types";
 import { btn, field, fieldError } from "@/lib/ui";
+import { useApi } from "@/lib/use-api";
 import { useTeacher } from "@/lib/use-teacher";
 
-function couponState(c: Coupon): "active" | "inactive" | "expired" {
-  if (new Date(c.expiresAt).getTime() < Date.now()) return "expired";
-  return c.active ? "active" : "inactive";
-}
+// Replaces (or adds) one coupon in the list, newest first like the API
+const upsert = (list: CouponView[] | undefined, c: CouponView) =>
+  list?.some((x) => x.id === c.id) ? list.map((x) => (x.id === c.id ? c : x)) : [c, ...(list ?? [])];
 
 export default function CouponsPage() {
-  const { db, teacher, courses, saveCoupon, deleteCoupon } = useTeacher();
+  const { teacher } = useTeacher();
+  // An empty id means a new coupon
   const [editing, setEditing] = useState<Coupon | null>(null);
-  const coupons = db.coupons
-    .filter((c) => c.teacherId === teacher.id)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  // Newest first, each with its state (expired wins over the active switch)
+  const list = useApi<CouponView[]>("/teacher/coupons");
+  const courses = useApi<TeacherCourseRow[]>("/teacher/courses").data ?? [];
+  const coupons = list.data ?? [];
 
   const openNew = () =>
     setEditing({
-      id: uid("cp"),
+      id: "",
       teacherId: teacher.id,
       code: "",
       type: "percent",
@@ -39,12 +44,28 @@ export default function CouponsPage() {
       createdAt: new Date().toISOString(),
     });
 
-  const remove = async (c: Coupon) => {
-    if (await confirmAction({ title: `Delete coupon ${c.code}?`, danger: true, confirmText: "Delete" })) {
-      deleteCoupon(c.id);
+  const remove = async (c: CouponView) => {
+    if (!(await confirmAction({ title: `Delete coupon ${c.code}?`, danger: true, confirmText: "Delete" }))) return;
+    try {
+      await api(`/teacher/coupons/${c.id}`, { method: "DELETE" });
+      list.setData((prev) => (prev ?? []).filter((x) => x.id !== c.id));
       toast.success("Coupon deleted");
+    } catch (err) {
+      toast.error(errorMessage(err));
     }
   };
+
+  const toggle = async (c: CouponView, active: boolean) => {
+    try {
+      const saved = await api<CouponView>(`/teacher/coupons/${c.id}/active`, { method: "PATCH", body: { active } });
+      list.setData((prev) => upsert(prev, saved));
+      toast.success(`${c.code} ${active ? "activated" : "deactivated"}`);
+    } catch (err) {
+      toast.error(errorMessage(err));
+    }
+  };
+
+  if (!ready(list)) return <ApiStatus state={list} />;
 
   return (
     <div>
@@ -57,7 +78,7 @@ export default function CouponsPage() {
           </button>
         }
       />
-      <DataTable<Coupon>
+      <DataTable<CouponView>
         rows={coupons}
         rowKey={(c) => c.id}
         emptyTitle="No coupons yet"
@@ -75,7 +96,7 @@ export default function CouponsPage() {
           },
           { header: "Used", cell: (c) => `${c.usedCount} / ${c.usageLimit}` },
           { header: "Expires", cell: (c) => <span className="whitespace-nowrap">{formatDate(c.expiresAt)}</span> },
-          { header: "Status", cell: (c) => <StatusBadge status={couponState(c)} /> },
+          { header: "Status", cell: (c) => <StatusBadge status={c.state} /> },
           {
             header: "Actions",
             className: "text-right",
@@ -85,10 +106,7 @@ export default function CouponsPage() {
                   <input
                     type="checkbox"
                     checked={c.active}
-                    onChange={(e) => {
-                      saveCoupon({ ...c, active: e.target.checked });
-                      toast.success(`${c.code} ${e.target.checked ? "activated" : "deactivated"}`);
-                    }}
+                    onChange={(e) => toggle(c, e.target.checked)}
                     className="accent-[var(--primary)] w-4 h-4"
                   />
                   Active
@@ -109,10 +127,10 @@ export default function CouponsPage() {
         <CouponForm
           coupon={editing}
           courses={courses.filter((c) => c.status !== "draft")}
-          existingCodes={db.coupons.filter((c) => c.teacherId === teacher.id && c.id !== editing.id).map((c) => c.code)}
+          existingCodes={coupons.filter((c) => c.id !== editing.id).map((c) => c.code)}
           onClose={() => setEditing(null)}
-          onSave={(c) => {
-            saveCoupon(c);
+          onSaved={(c) => {
+            list.setData((prev) => upsert(prev, c));
             setEditing(null);
             toast.success("Coupon saved");
           }}
@@ -127,19 +145,20 @@ function CouponForm({
   courses,
   existingCodes,
   onClose,
-  onSave,
+  onSaved,
 }: {
   coupon: Coupon;
   courses: { id: string; title: string }[];
   existingCodes: string[];
   onClose: () => void;
-  onSave: (c: Coupon) => void;
+  onSaved: (c: CouponView) => void;
 }) {
   const [form, setForm] = useState(coupon);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
   const set = (patch: Partial<Coupon>) => setForm((f) => ({ ...f, ...patch }));
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     const found: Record<string, string> = {};
     if (!/^[A-Z0-9]{4,15}$/.test(form.code)) found.code = "Use 4–15 letters or numbers.";
@@ -148,7 +167,24 @@ function CouponForm({
     if (form.type === "percent" && form.value > 90) found.value = "Percentage discounts are capped at 90%.";
     if (!(form.usageLimit >= 1)) found.usageLimit = "Allow at least one use.";
     setErrors(found);
-    if (!Object.keys(found).length) onSave(form);
+    if (Object.keys(found).length) return;
+
+    setSaving(true);
+    const { code, type, value, usageLimit, expiresAt, courseId, active } = form;
+    const body = { code, type, value, usageLimit, expiresAt, courseId, active };
+    try {
+      onSaved(
+        coupon.id
+          ? await api<CouponView>(`/teacher/coupons/${coupon.id}`, { method: "PUT", body })
+          : await api<CouponView>("/teacher/coupons", { method: "POST", body }),
+      );
+    } catch (err) {
+      // e.g. code: "You already have a coupon with this code."
+      const fields = err instanceof ApiError ? err.fields : undefined;
+      if (fields && Object.keys(fields).length) setErrors(fields);
+      else toast.error(errorMessage(err));
+      setSaving(false);
+    }
   };
 
   return (
@@ -162,7 +198,7 @@ function CouponForm({
           <button onClick={onClose} className={btn.secondary}>
             Cancel
           </button>
-          <button type="submit" form="coupon-form" className={btn.primary}>
+          <button type="submit" form="coupon-form" disabled={saving} className={btn.primary}>
             Save coupon
           </button>
         </>
@@ -196,7 +232,7 @@ function CouponForm({
             />
           </Field>
         </div>
-        <Field label="Applies to" htmlFor="course">
+        <Field label="Applies to" htmlFor="course" error={errors.courseId}>
           <select id="course" value={form.courseId ?? ""} onChange={(e) => set({ courseId: e.target.value || null })} className={field}>
             <option value="">All my courses</option>
             {courses.map((c) => (
@@ -207,7 +243,7 @@ function CouponForm({
           </select>
         </Field>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Expiry date" htmlFor="expires">
+          <Field label="Expiry date" htmlFor="expires" error={errors.expiresAt}>
             <input
               id="expires"
               type="date"

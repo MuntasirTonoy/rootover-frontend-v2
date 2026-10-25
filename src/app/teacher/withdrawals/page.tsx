@@ -3,27 +3,31 @@
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Loader2, Wallet } from "lucide-react";
+import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import DataTable from "@/components/ui/DataTable";
 import { Field, PageHeader, Section, SimulatedNotice, StatCard, StatusBadge } from "@/components/ui/primitives";
+import { api, errorMessage } from "@/lib/api";
+import type { TeacherWithdrawals } from "@/lib/api-types";
 import { confirmAction } from "@/lib/confirm";
 import { formatBDT, formatDateTime, maskNumber } from "@/lib/format";
 import { MIN_WITHDRAWAL } from "@/lib/pricing";
-import { latestApplication, teacherFinance } from "@/lib/selectors";
 import type { Withdrawal } from "@/lib/types";
 import { btn, field, fieldError } from "@/lib/ui";
-import { useTeacher } from "@/lib/use-teacher";
+import { useApi } from "@/lib/use-api";
 
 export default function WithdrawalsPage() {
-  const { db, user, teacher, requestWithdrawal } = useTeacher();
-  const finance = teacherFinance(db, teacher.id);
-  const defaultAccount = latestApplication(db, user!.id)?.bkashNumber ?? "";
+  const state = useApi<TeacherWithdrawals>("/teacher/withdrawals");
+  if (!ready(state)) return <ApiStatus state={state} />;
+  return <Withdrawals data={state.data} reload={state.reload} />;
+}
+
+// Rendered once the data is in, so the form can start from the default account
+function Withdrawals({ data, reload }: { data: TeacherWithdrawals; reload: () => void }) {
+  const { finance, withdrawals: history } = data;
   const [amount, setAmount] = useState("");
-  const [account, setAccount] = useState(defaultAccount);
+  const [account, setAccount] = useState(data.defaultAccount);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const history = db.withdrawals
-    .filter((w) => w.teacherId === teacher.id)
-    .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -35,13 +39,14 @@ export default function WithdrawalsPage() {
     if (!(await confirmAction({ title: `Withdraw ${formatBDT(value)}?`, text: `To bKash ${maskNumber(account)} (simulated payout).`, confirmText: "Request" })))
       return;
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 500));
     try {
-      requestWithdrawal(value, account);
+      // The API re-checks the balance; it may have changed since this page loaded
+      await api("/teacher/withdrawals", { method: "POST", body: { amount: value, accountNumber: account } });
       setAmount("");
       toast.success("Withdrawal requested. An admin will review it.");
+      reload();
     } catch (err) {
-      setError((err as Error).message);
+      setError(errorMessage(err));
     } finally {
       setSubmitting(false);
     }

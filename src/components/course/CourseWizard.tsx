@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  Loader2,
   Plus,
   Save,
   Send,
@@ -19,14 +20,16 @@ import {
 } from "lucide-react";
 import CourseThumb from "./CourseThumb";
 import CurriculumList from "./CurriculumList";
-import ImageUpload from "@/components/dashboard/ImageUpload";
 import { Avatar, Badge, courseStatusLabel, Field, StatusBadge } from "@/components/ui/primitives";
+import { ApiError, errorMessage } from "@/lib/api";
+import type { TeacherPublic } from "@/lib/api-types";
 import { confirmAction } from "@/lib/confirm";
 import { formatBDT, formatDuration, uid } from "@/lib/format";
 import { quote } from "@/lib/pricing";
-import { courseDuration, lessonCount, type TeacherWithUser } from "@/lib/selectors";
+import { courseDuration, lessonCount } from "@/lib/selectors";
 import { LEVELS, type Chapter, type Course, type Lesson } from "@/lib/types";
 import { btn, field, fieldError } from "@/lib/ui";
+import { editorErrors, saveCourse, submitCourse } from "@/lib/use-teacher";
 import { toEmbedUrl } from "@/lib/youtube";
 
 type Errors = Record<string, string>;
@@ -92,16 +95,19 @@ function validateCurriculum(c: Course): Errors {
 
 interface CourseWizardProps {
   initial: Course;
-  teacher: TeacherWithUser;
+  teacher: TeacherPublic;
   isNew: boolean;
-  onSave: (course: Course) => void;
 }
 
-export default function CourseWizard({ initial, teacher, isNew, onSave }: CourseWizardProps) {
+// Courses students can see (or soon will): the API only saves them complete
+const GUARDED: Course["status"][] = ["pending", "approved", "suspended"];
+
+export default function CourseWizard({ initial, teacher, isNew }: CourseWizardProps) {
   const router = useRouter();
   const [course, setCourse] = useState<Course>(initial);
   const [step, setStep] = useState(0);
   const [errors, setErrors] = useState<Errors>({});
+  const [busy, setBusy] = useState(false);
   const [previewing, setPreviewing] = useState<string | null>(null);
 
   const update = (patch: Partial<Course>) => setCourse((c) => ({ ...c, ...patch }));
@@ -146,38 +152,77 @@ export default function CourseWizard({ initial, teacher, isNew, onSave }: Course
     })),
   });
 
-  const saveDraft = () => {
+  // Shows every missing field and jumps to the first step that has one
+  const showErrors = (all: Errors, message: string) => {
+    setErrors(all);
+    setStep(Object.keys(validateInfo(course)).length ? 0 : 1);
+    toast.error(message);
+  };
+
+  // Server field errors land on the same inputs as the editor's own checks
+  const showServerError = (err: unknown, target: Course) => {
+    if (err instanceof ApiError && err.fields && Object.keys(err.fields).length) {
+      const mapped = editorErrors(err.fields, target);
+      setErrors(mapped);
+      setStep(Object.keys(mapped).some((k) => k.startsWith("ch-") || k.startsWith("l-") || k === "chapters") ? 1 : 0);
+    }
+    toast.error(errorMessage(err));
+  };
+
+  // Saves to the API and continues from what it returns (new chapters and
+  // lessons get their real ids there). New courses move to their edit URL.
+  const persist = async () => {
+    const saved = await saveCourse(cleaned(course.status), isNew);
+    setCourse(saved);
+    if (isNew) router.replace(`/teacher/courses/${saved.id}/edit`);
+    return saved;
+  };
+
+  const saveDraft = async () => {
     if (course.title.trim().length < 5) {
       setStep(0);
       setErrors({ title: "Give the course a title of at least 5 characters before saving." });
       return;
     }
-    // Saving never changes status; edits to an approved course stay live in the demo
-    const saved = cleaned(course.status);
-    onSave(saved);
-    setCourse(saved);
-    toast.success(isNew ? "Draft saved" : "Changes saved");
-    if (isNew) router.replace(`/teacher/courses/${saved.id}/edit`);
+    // A live or under-review course can't be saved incomplete
+    if (GUARDED.includes(course.status)) {
+      const all = { ...validateInfo(course), ...validateCurriculum(course) };
+      if (Object.keys(all).length) return showErrors(all, "This course is live or under review, so every field must stay complete.");
+    }
+    setBusy(true);
+    try {
+      await persist();
+      setErrors({});
+      toast.success(isNew ? "Draft saved" : "Changes saved");
+    } catch (err) {
+      showServerError(err, course);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const submit = async () => {
     const all = { ...validateInfo(course), ...validateCurriculum(course) };
-    if (Object.keys(all).length) {
-      setErrors(all);
-      setStep(Object.keys(validateInfo(course)).length ? 0 : 1);
-      toast.error("Complete every required field before submitting.");
-      return;
-    }
+    if (Object.keys(all).length) return showErrors(all, "Complete every required field before submitting.");
     const ok = await confirmAction({
       title: "Submit for approval?",
       text: "An admin will review the course before students can buy it.",
       confirmText: "Submit",
     });
     if (!ok) return;
-    const saved = cleaned("pending");
-    onSave(saved);
-    toast.success("Course submitted for admin approval");
-    router.push("/teacher/courses");
+    setBusy(true);
+    let saved: Course | undefined;
+    try {
+      // Save first: the API checks the saved course
+      saved = await persist();
+      await submitCourse(saved.id);
+      toast.success("Course submitted for admin approval");
+      router.push("/teacher/courses");
+    } catch (err) {
+      showServerError(err, saved ?? course);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const err = (key: string) => errors[key];
@@ -320,7 +365,19 @@ export default function CourseWizard({ initial, teacher, isNew, onSave }: Course
             </p>
           )}
 
-          <ImageUpload value={course.thumbnail} onChange={(thumbnail) => update({ thumbnail })} label="Course thumbnail" />
+          {/* Uploads aren't connected yet; the generated level cover is used meanwhile */}
+          <div>
+            <span className="block text-sm font-semibold mb-1.5">Course thumbnail</span>
+            <div className="flex items-center gap-3">
+              <div className="w-40 shrink-0 overflow-hidden rounded-md border border-border">
+                <CourseThumb course={course} />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Uploading your own thumbnail is coming soon. Until then the course uses a cover generated from its level and
+                subject.
+              </p>
+            </div>
+          </div>
 
           <div>
             <span className="block text-sm font-semibold mb-1.5">Teacher</span>
@@ -545,17 +602,18 @@ export default function CourseWizard({ initial, teacher, isNew, onSave }: Course
           <ArrowLeft size={16} /> Back
         </button>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={saveDraft} className={btn.secondary}>
-            <Save size={16} /> {course.status === "draft" ? "Save draft" : "Save changes"}
+          <button type="button" onClick={saveDraft} disabled={busy} className={btn.secondary}>
+            {busy ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+            {course.status === "draft" ? "Save draft" : "Save changes"}
           </button>
           {step < 2 ? (
             <button type="button" onClick={() => goTo(step + 1)} className={btn.primary}>
               Next <ArrowRight size={16} />
             </button>
           ) : (
-            course.status !== "approved" &&
-            course.status !== "pending" && (
-              <button type="button" onClick={submit} className={btn.primary}>
+            // Only drafts and rejected courses can go (back) to review
+            (course.status === "draft" || course.status === "rejected") && (
+              <button type="button" onClick={submit} disabled={busy} className={btn.primary}>
                 <Send size={16} /> Submit for approval
               </button>
             )

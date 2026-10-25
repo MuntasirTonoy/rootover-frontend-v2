@@ -3,26 +3,32 @@
 import { useState } from "react";
 import { Bookmark, CheckCircle2, ChevronDown, Circle, Lock, PlayCircle } from "lucide-react";
 import { formatDuration } from "@/lib/format";
-import type { Chapter, Lesson } from "@/lib/types";
+// The fields shown here; fits the API's LessonPublic
+interface SidebarLesson {
+  id: string;
+  title: string;
+  durationMin: number;
+  isPreview: boolean;
+}
 
-interface CurriculumSidebarProps {
-  chapters: Chapter[];
+interface CurriculumSidebarProps<L extends SidebarLesson> {
+  chapters: { id: string; title: string; lessons: L[] }[];
   activeLessonId?: string;
   completed: Set<string>;
   saved: Set<string>;
-  canWatch: (lesson: Lesson) => boolean;
-  onSelect: (lesson: Lesson) => void;
+  canWatch: (lesson: L) => boolean;
+  onSelect: (lesson: L) => void;
 }
 
 // Chapter/lesson navigator for the course player
-export default function CurriculumSidebar({
+export default function CurriculumSidebar<L extends SidebarLesson>({
   chapters,
   activeLessonId,
   completed,
   saved,
   canWatch,
   onSelect,
-}: CurriculumSidebarProps) {
+}: CurriculumSidebarProps<L>) {
   const activeChapter = chapters.find((c) => c.lessons.some((l) => l.id === activeLessonId))?.id;
   // Chapters the user explicitly toggled; the active chapter is open by default
   const [toggled, setToggled] = useState<Record<string, boolean>>({});

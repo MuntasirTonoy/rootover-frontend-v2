@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -14,14 +14,17 @@ import {
   Sparkles,
   XCircle,
 } from "lucide-react";
+import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import FileInput from "@/components/ui/FileInput";
 import Modal from "@/components/ui/Modal";
 import { Field, SimulatedNotice, StatusBadge } from "@/components/ui/primitives";
 import { useApp, type ApplicationInput } from "@/context/AppStore";
+import { api, ApiError, errorMessage } from "@/lib/api";
+import type { MyApplication } from "@/lib/api-types";
 import { formatBDT, formatDate, maskNumber } from "@/lib/format";
 import { REGISTRATION_FEE } from "@/lib/pricing";
-import { getTeacherByUser, latestApplication } from "@/lib/selectors";
-import type { ApplicationStatus, TeacherApplication } from "@/lib/types";
+import type { ApplicationStatus, RegistrationFee, TeacherApplication, UploadedDoc } from "@/lib/types";
+import { useApi } from "@/lib/use-api";
 import { btn, field, fieldError } from "@/lib/ui";
 
 const steps: { status: ApplicationStatus; label: string }[] = [
@@ -32,11 +35,19 @@ const steps: { status: ApplicationStatus; label: string }[] = [
 ];
 
 export default function TeacherApplyPage() {
-  const { db, user } = useApp();
-  const application = latestApplication(db, user!.id);
-  const teacher = getTeacherByUser(db, user!.id);
+  const { user, refreshUser } = useApp();
+  // The latest application, its fee and (once approved) the teacher profile
+  const mine = useApi<MyApplication>("/me/teacher-application");
   const [reapplying, setReapplying] = useState(false);
+  const application = mine.data?.application ?? null;
+  const approved = application?.status === "approved";
 
+  // Approval switches the account to the teacher role: reload it so the teacher tools unlock
+  useEffect(() => {
+    if (approved && user?.role === "student") void refreshUser();
+  }, [approved, user?.role, refreshUser]);
+
+  if (!ready(mine)) return <ApiStatus state={mine} />;
   const showForm = !application || (application.status === "rejected" && reapplying);
 
   return (
@@ -51,9 +62,21 @@ export default function TeacherApplyPage() {
       {application && <StatusTracker application={application} />}
 
       {showForm ? (
-        <ApplicationForm defaultName={user!.name} onSubmitted={() => setReapplying(false)} />
+        <ApplicationForm
+          defaultName={user!.name}
+          onSubmitted={() => {
+            setReapplying(false);
+            mine.reload();
+          }}
+        />
       ) : application ? (
-        <StatusPanel application={application} teacherCode={teacher?.teacherCode} onReapply={() => setReapplying(true)} />
+        <StatusPanel
+          application={application}
+          fee={mine.data.registrationFee}
+          teacherCode={mine.data.teacher?.teacherCode}
+          onPaid={(result) => mine.setData((d) => ({ ...d!, ...result }))}
+          onReapply={() => setReapplying(true)}
+        />
       ) : null}
     </div>
   );
@@ -89,30 +112,41 @@ function StatusTracker({ application }: { application: TeacherApplication }) {
 
 function StatusPanel({
   application,
+  fee,
   teacherCode,
+  onPaid,
   onReapply,
 }: {
   application: TeacherApplication;
+  fee: RegistrationFee | null;
   teacherCode?: string;
+  onPaid: (result: { application: TeacherApplication; registrationFee: RegistrationFee }) => void;
   onReapply: () => void;
 }) {
-  const { db, payRegistrationFee } = useApp();
   const [payOpen, setPayOpen] = useState(false);
   const [wallet, setWallet] = useState({ number: application.bkashNumber, pin: "" });
   const [error, setError] = useState("");
   const [paying, setPaying] = useState(false);
-  const fee = db.registrationFees.find((f) => f.applicationId === application.id);
 
   const pay = async (e: FormEvent) => {
     e.preventDefault();
     if (!/^01\d{9}$/.test(wallet.number)) return setError("Enter an 11-digit bKash number starting with 01.");
     if (!/^\d{4,5}$/.test(wallet.pin)) return setError("Enter any 4–5 digit demo PIN.");
     setPaying(true);
-    await new Promise((r) => setTimeout(r, 900));
-    payRegistrationFee(application.id, wallet.number);
-    setPaying(false);
-    setPayOpen(false);
-    toast.success("Registration fee paid (simulated). Your application is now under verification.");
+    try {
+      // SIMULATED: no gateway call. The demo PIN is never sent or stored.
+      const result = await api<{ application: TeacherApplication; registrationFee: RegistrationFee }>(
+        `/teacher-applications/${application.id}/pay-fee`,
+        { method: "POST", body: { payerNumber: wallet.number } },
+      );
+      setPayOpen(false);
+      onPaid(result);
+      toast.success("Registration fee paid (simulated). Your application is now under verification.");
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setPaying(false);
+    }
   };
 
   const panels: Record<ApplicationStatus, { icon: typeof Clock; title: string; body: React.ReactNode }> = {
@@ -249,8 +283,11 @@ function demoDoc(name: string, type: string) {
   return { name, type, size: 150_000 };
 }
 
+// What the API stores until uploads exist: the file's name, type and size (the
+// local preview link never leaves the browser)
+const docMeta = (doc?: UploadedDoc) => doc && { name: doc.name, type: doc.type, size: doc.size };
+
 function ApplicationForm({ defaultName, onSubmitted }: { defaultName: string; onSubmitted: () => void }) {
-  const { submitApplication } = useApp();
   const [form, setForm] = useState<FormState>({
     fullName: defaultName,
     nid: "",
@@ -305,11 +342,31 @@ function ApplicationForm({ defaultName, onSubmitted }: { defaultName: string; on
       return;
     }
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 600));
-    submitApplication({ ...form, fullName: form.fullName.trim() });
-    setSubmitting(false);
-    onSubmitted();
-    toast.success("Application submitted! An admin will review it soon.");
+    try {
+      await api("/teacher-applications", {
+        method: "POST",
+        body: {
+          ...form,
+          fullName: form.fullName.trim(),
+          photo: docMeta(form.photo),
+          sscCertificate: docMeta(form.sscCertificate),
+          hscCertificate: docMeta(form.hscCertificate),
+          fatherVoterId: docMeta(form.fatherVoterId),
+        },
+      });
+      onSubmitted();
+      toast.success("Application submitted! An admin will review it soon.");
+    } catch (err) {
+      // "photo.type" etc. belong to the photo input
+      const fields = err instanceof ApiError ? err.fields : undefined;
+      if (fields && Object.keys(fields).length) {
+        const mapped: Errors = {};
+        for (const [key, message] of Object.entries(fields)) mapped[key.split(".")[0] as keyof FormState] ??= message;
+        setErrors(mapped);
+      }
+      toast.error(errorMessage(err));
+      setSubmitting(false);
+    }
   };
 
   const text = (key: "fullName" | "nid" | "bkashNumber" | "tin", label: string, opts: { numeric?: boolean; placeholder?: string } = {}) => (

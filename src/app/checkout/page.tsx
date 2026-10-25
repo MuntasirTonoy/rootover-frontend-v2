@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { CheckCircle2, CreditCard, Loader2, Lock, Smartphone, Tag, X } from "lucide-react";
@@ -8,13 +8,16 @@ import AuthGuard from "@/components/AuthGuard";
 import CourseThumb from "@/components/course/CourseThumb";
 import LoadingAnimation from "@/components/LoadingAnimation";
 import Modal from "@/components/ui/Modal";
+import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import { EmptyBlock, Field, SimulatedNotice } from "@/components/ui/primitives";
-import { useApp } from "@/context/AppStore";
+import { api, ApiError, errorMessage } from "@/lib/api";
+import type { CouponPublic, CourseDetail, Quote } from "@/lib/api-types";
 import { formatBDT, maskNumber } from "@/lib/format";
-import { checkCoupon, quote } from "@/lib/pricing";
-import { catalogCourses, enrollmentFor, lessonCount, resumeLesson, teacherInfo } from "@/lib/selectors";
-import type { Coupon, PaymentMethod, Purchase } from "@/lib/types";
+import type { Enrollment, PaymentMethod, Purchase } from "@/lib/types";
+import { useApi } from "@/lib/use-api";
 import { btn, field, fieldError } from "@/lib/ui";
+
+type QuoteResult = { quote: Quote; coupon: CouponPublic | null };
 
 const methods: { id: PaymentMethod; label: string; caption: string; icon: typeof Smartphone }[] = [
   { id: "bKash", label: "bKash", caption: "Mobile wallet (simulated)", icon: Smartphone },
@@ -39,12 +42,15 @@ export default function CheckoutPage() {
 }
 
 function Checkout() {
-  const { db, user, purchase } = useApp();
   const courseId = useSearchParams().get("courseId") ?? "";
-  const course = catalogCourses(db).find((c) => c.id === courseId);
+  const detail = useApi<CourseDetail>(courseId ? `/courses/${courseId}` : null);
+  // Demo hint: codes that currently work for this course
+  const demoCodes = useApi<string[]>(courseId ? `/checkout/coupons/${courseId}` : null).data ?? [];
 
   const [codeInput, setCodeInput] = useState("");
-  const [coupon, setCoupon] = useState<Coupon | null>(null);
+  // The price comes from the API: without a coupon first, then with the applied one
+  const [priced, setPriced] = useState<QuoteResult | null>(null);
+  const [applying, setApplying] = useState(false);
   const [couponError, setCouponError] = useState("");
   const [method, setMethod] = useState<PaymentMethod>("bKash");
   const [walletOpen, setWalletOpen] = useState(false);
@@ -53,7 +59,19 @@ function Checkout() {
   const [processing, setProcessing] = useState(false);
   const [done, setDone] = useState<Purchase | null>(null);
 
-  if (!course) {
+  const course = detail.data;
+  const buyable = !!course?.published && !course.access.enrolled;
+
+  useEffect(() => {
+    if (!buyable) return;
+    api<QuoteResult>("/checkout/quote", { method: "POST", body: { courseId } })
+      .then(setPriced)
+      .catch((err) => setCouponError(errorMessage(err)));
+  }, [buyable, courseId]);
+
+  if (!ready(detail) && detail.error?.status !== 404) return <ApiStatus state={detail} className="min-h-[60vh]" />;
+
+  if (!course || !course.published) {
     return (
       <div className="container-custom py-16">
         <EmptyBlock
@@ -69,14 +87,19 @@ function Checkout() {
     );
   }
 
-  const teacher = teacherInfo(db, course.teacherId);
-  const owned = enrollmentFor(db, user!.id, course.id);
-  const q = quote(course, coupon);
-  // Demo hint: codes that would currently work for this course
-  const demoCodes = db.coupons.filter((c) => checkCoupon(db.coupons, course, c.code).ok).map((c) => c.code);
+  const { teacher } = course;
+  const owned = course.access.enrolled;
+  const coupon = priced?.coupon ?? null;
+  // Until the first quote arrives, the course's own prices (no coupon)
+  const q: Pick<Quote, "listPrice" | "courseDiscount" | "couponDiscount" | "total"> = priced?.quote ?? {
+    listPrice: course.price,
+    courseDiscount: course.price - course.effectivePrice,
+    couponDiscount: 0,
+    total: course.effectivePrice,
+  };
 
   if (done || owned) {
-    const first = resumeLesson(course, owned);
+    const first = course.enrollment?.resumeLessonId ?? course.chapters[0]?.lessons[0]?.id;
     return (
       <div className="container-custom py-16 max-w-xl text-center">
         <CheckCircle2 size={56} className="mx-auto text-green-600 mb-4" />
@@ -91,7 +114,7 @@ function Checkout() {
           </p>
         )}
         <div className="flex flex-wrap justify-center gap-3 mt-4">
-          <Link href={`/learn/${course.id}${first ? `?lesson=${first.id}` : ""}`} className={btn.primary}>
+          <Link href={`/learn/${course.id}${first ? `?lesson=${first}` : ""}`} className={btn.primary}>
             Start learning
           </Link>
           <Link href="/my-classes" className={btn.secondary}>
@@ -102,26 +125,45 @@ function Checkout() {
     );
   }
 
-  const applyCoupon = (e: FormEvent) => {
+  // Coupon errors come back as 422 with the spec's messages ("This coupon has expired." ...)
+  const applyCoupon = async (e: FormEvent) => {
     e.preventDefault();
-    if (!codeInput.trim()) return;
-    const check = checkCoupon(db.coupons, course, codeInput);
-    if (check.ok) {
-      setCoupon(check.coupon);
+    const code = codeInput.trim();
+    if (!code) return;
+    setApplying(true);
+    try {
+      setPriced(await api<QuoteResult>("/checkout/quote", { method: "POST", body: { courseId, couponCode: code } }));
       setCouponError("");
-    } else {
-      setCoupon(null);
-      setCouponError(check.error);
+    } catch (err) {
+      setCouponError(errorMessage(err));
+    } finally {
+      setApplying(false);
     }
   };
 
+  const removeCoupon = async () => {
+    setCodeInput("");
+    setCouponError("");
+    try {
+      setPriced(await api<QuoteResult>("/checkout/quote", { method: "POST", body: { courseId } }));
+    } catch (err) {
+      setCouponError(errorMessage(err));
+    }
+  };
+
+  // SIMULATED payment: the API records the purchase and enrolls the student at once
   const complete = async () => {
     setProcessing(true);
-    await new Promise((r) => setTimeout(r, 900));
     try {
-      setDone(purchase({ courseId: course.id, couponCode: coupon?.code, method }));
+      const result = await api<{ purchase: Purchase; enrollment: Enrollment }>("/checkout", {
+        method: "POST",
+        body: { courseId, couponCode: coupon?.code, method },
+      });
+      setDone(result.purchase);
     } catch (err) {
-      setCouponError((err as Error).message);
+      // Bought in another tab meanwhile: show the "already own" screen
+      if (err instanceof ApiError && err.status === 409) detail.reload();
+      else setCouponError(errorMessage(err));
     } finally {
       setProcessing(false);
       setWalletOpen(false);
@@ -155,9 +197,9 @@ function Checkout() {
                 {course.level} · {course.subject}
               </p>
               <h2 className="font-bold text-foreground">{course.title}</h2>
-              <p className="text-sm text-muted-foreground">by {teacher?.name}</p>
+              <p className="text-sm text-muted-foreground">by {teacher.name}</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {course.chapters.length} chapters · {lessonCount(course)} lessons · lifetime access
+                {course.chapterCount} chapters · {course.lessonCount} lessons · lifetime access
               </p>
             </div>
           </section>
@@ -173,10 +215,7 @@ function Checkout() {
                   {coupon.type === "percent" ? `${coupon.value}% off` : `${formatBDT(coupon.value)} off`}
                 </span>
                 <button
-                  onClick={() => {
-                    setCoupon(null);
-                    setCodeInput("");
-                  }}
+                  onClick={removeCoupon}
                   className="p-1 rounded hover:bg-surface"
                   aria-label="Remove coupon"
                 >
@@ -193,7 +232,8 @@ function Checkout() {
                   aria-invalid={!!couponError}
                   className={`${field} font-mono ${couponError ? fieldError : ""}`}
                 />
-                <button type="submit" className={btn.secondary}>
+                <button type="submit" disabled={applying} className={btn.secondary}>
+                  {applying ? <Loader2 size={16} className="animate-spin" /> : null}
                   Apply
                 </button>
               </form>
@@ -263,7 +303,7 @@ function Checkout() {
                 <dd className="text-primary">{formatBDT(q.total)}</dd>
               </div>
             </dl>
-            <button onClick={handlePay} disabled={processing} className={`${btn.primary} w-full py-3 mt-5`}>
+            <button onClick={handlePay} disabled={processing || !priced} className={`${btn.primary} w-full py-3 mt-5`}>
               {processing ? <Loader2 size={18} className="animate-spin" /> : <Lock size={16} />}
               {processing ? "Processing..." : `Pay ${formatBDT(q.total)}`}
             </button>

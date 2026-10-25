@@ -7,10 +7,12 @@ import { GraduationCap } from "lucide-react";
 import AuthGuard from "@/components/AuthGuard";
 import DashboardShell from "@/components/DashboardShell";
 import LoadingAnimation from "@/components/LoadingAnimation";
+import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import { EmptyBlock } from "@/components/ui/primitives";
 import { useApp } from "@/context/AppStore";
 import { teacherNav } from "@/lib/navigation";
-import { getTeacherByUser } from "@/lib/selectors";
+import { useApi } from "@/lib/use-api";
+import { TeacherContext, type TeacherMe } from "@/lib/use-teacher";
 import { btn } from "@/lib/ui";
 
 export default function TeacherLayout({ children }: { children: React.ReactNode }) {
@@ -32,8 +34,10 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
 // The application page is open to every signed-in user; the rest needs an approved teacher
 function TeacherArea({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { db, user } = useApp();
-  const isTeacher = user!.role === "teacher" && !!getTeacherByUser(db, user!.id);
+  const { user } = useApp();
+  const isTeacher = user!.role === "teacher";
+  // Loaded once for every teacher page (useTeacher); 403 without a teacher profile
+  const me = useApi<TeacherMe>(isTeacher ? "/teacher/me" : null);
 
   if (pathname.startsWith("/teacher/apply")) {
     return isTeacher ? (
@@ -68,7 +72,11 @@ function TeacherArea({ children }: { children: React.ReactNode }) {
 
   return (
     <DashboardShell title="Teaching" nav={teacherNav}>
-      {children}
+      {ready(me) ? (
+        <TeacherContext.Provider value={{ ...me.data, reload: me.reload }}>{children}</TeacherContext.Provider>
+      ) : (
+        <ApiStatus state={me} />
+      )}
     </DashboardShell>
   );
 }

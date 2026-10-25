@@ -1,22 +1,24 @@
 "use client";
 
 import { useState } from "react";
+import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import DataTable from "@/components/ui/DataTable";
 import SalesChart from "@/components/ui/SalesChart";
 import { FilterSelect, PageHeader, Section, StatCard, StatusBadge } from "@/components/ui/primitives";
 import { formatBDT, formatDateTime } from "@/lib/format";
 import { CLEARING_DAYS, COMMISSION_RATE } from "@/lib/pricing";
-import { getCourse, getUser, monthlySeries, teacherFinance } from "@/lib/selectors";
-import type { Purchase } from "@/lib/types";
-import { useTeacher } from "@/lib/use-teacher";
+import { withQuery } from "@/lib/api";
+import type { PurchaseView, TeacherCourseRow, TeacherEarnings } from "@/lib/api-types";
+import { useApi } from "@/lib/use-api";
 
 export default function EarningsPage() {
-  const { db, teacher, courses } = useTeacher();
   const [courseId, setCourseId] = useState("");
-  const finance = teacherFinance(db, teacher.id);
-  const purchases = db.purchases
-    .filter((p) => p.teacherId === teacher.id && (!courseId || p.courseId === courseId))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const [page, setPage] = useState(1);
+  const courses = useApi<TeacherCourseRow[]>("/teacher/courses").data ?? [];
+  // Finance and the chart cover every sale; courseId and page only change the transactions
+  const earnings = useApi<TeacherEarnings>(withQuery("/teacher/earnings", { courseId, page, limit: 10 }));
+  if (!ready(earnings)) return <ApiStatus state={earnings} />;
+  const { finance, monthly, transactions } = earnings.data;
 
   return (
     <div className="space-y-6">
@@ -56,7 +58,7 @@ export default function EarningsPage() {
 
       <Section title="Monthly earnings">
         <SalesChart
-          data={monthlySeries(db.purchases.filter((p) => p.teacherId === teacher.id))}
+          data={monthly}
           series={[
             { key: "gross", label: "Gross", color: "#00c853" },
             { key: "commission", label: "Commission", color: "#f59e0b" },
@@ -71,23 +73,27 @@ export default function EarningsPage() {
           <FilterSelect
             label="Course"
             value={courseId}
-            onChange={setCourseId}
+            onChange={(v) => {
+              setCourseId(v);
+              setPage(1);
+            }}
             options={[{ value: "", label: "All courses" }, ...courses.map((c) => ({ value: c.id, label: c.title }))]}
           />
         }
       >
-        <DataTable<Purchase>
-          rows={purchases}
+        <DataTable<PurchaseView>
+          rows={transactions.data}
           rowKey={(p) => p.id}
           emptyTitle="No sales yet"
+          serverPage={{ ...transactions.pagination, onPageChange: setPage, loading: earnings.loading }}
           columns={[
             { header: "Date", cell: (p) => <span className="whitespace-nowrap text-xs">{formatDateTime(p.createdAt)}</span> },
             {
               header: "Course / student",
               cell: (p) => (
                 <div className="min-w-[180px]">
-                  <p className="font-semibold line-clamp-1">{getCourse(db, p.courseId)?.title}</p>
-                  <p className="text-xs text-muted-foreground">{getUser(db, p.studentId)?.name}</p>
+                  <p className="font-semibold line-clamp-1">{p.course.title}</p>
+                  <p className="text-xs text-muted-foreground">{p.student.name}</p>
                 </div>
               ),
             },

@@ -20,10 +20,10 @@ import CourseCard from "@/components/CourseCard";
 import TeacherCard from "@/components/course/TeacherCard";
 import CountUp from "@/components/CountUp";
 import FAQ from "@/components/FAQ";
-import { useApp } from "@/context/AppStore";
+import type { CourseSummary, Facets, Paginated, TeacherPublic } from "@/lib/api-types";
 import { levelMeta } from "@/lib/levels";
 import { banner } from "@/lib/site-config";
-import { catalogCourses, courseRating, courseStudentCount, teacherInfo } from "@/lib/selectors";
+import { useApi } from "@/lib/use-api";
 import { LEVELS } from "@/lib/types";
 
 // One vertical rhythm for every landing section
@@ -76,29 +76,16 @@ function ViewAllLink({ href, children }: { href: string; children: ReactNode }) 
 
 export default function Home() {
   const router = useRouter();
-  const { db } = useApp();
   const [query, setQuery] = useState("");
 
-  const courses = catalogCourses(db);
-  const featured = [...courses]
-    .sort(
-      (a, b) =>
-        Number(!!b.featured) - Number(!!a.featured) ||
-        courseRating(b).average - courseRating(a).average,
-    )
+  // Featured first, then best rated (the API sorts by rating; the catalog is small)
+  const catalog = useApi<Paginated<CourseSummary>>("/courses?sort=rating&limit=100");
+  const featured = [...(catalog.data?.data ?? [])]
+    .sort((a, b) => Number(b.featured) - Number(a.featured))
     .slice(0, 8);
-
-  // Teachers ranked by how many students their published courses have
-  const teachers = db.teachers
-    .map((t) => ({
-      info: teacherInfo(db, t.id),
-      students: courses
-        .filter((c) => c.teacherId === t.id)
-        .reduce((sum, c) => sum + courseStudentCount(db, c.id), 0),
-    }))
-    .filter((t) => t.info?.status === "active" && t.students > 0)
-    .sort((a, b) => b.students - a.students)
-    .slice(0, 4);
+  const levelCounts = useApi<Facets>("/courses/facets").data?.levels;
+  // Already ranked by how many students their published courses have
+  const teachers = (useApi<TeacherPublic[]>("/teachers").data ?? []).slice(0, 4);
 
   const handleSearch = (e: FormEvent) => {
     e.preventDefault();
@@ -185,7 +172,7 @@ export default function Home() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
             {LEVELS.map((level, i) => {
               const meta = levelMeta[level];
-              const count = courses.filter((c) => c.level === level).length;
+              const count = levelCounts?.find((l) => l.level === level)?.count ?? 0;
               return (
                 <motion.div
                   key={level}
@@ -254,7 +241,9 @@ export default function Home() {
             action={<ViewAllLink href="/teachers">All teachers</ViewAllLink>}
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            {teachers.map(({ info }) => info && <TeacherCard key={info.id} teacher={info} />)}
+            {teachers.map((t) => (
+              <TeacherCard key={t.id} teacher={t} />
+            ))}
           </div>
         </div>
       </section>
