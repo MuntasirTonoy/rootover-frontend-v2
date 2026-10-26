@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Loader2, Wallet } from "lucide-react";
 import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import DataTable from "@/components/ui/DataTable";
-import { Field, PageHeader, Section, SimulatedNotice, StatCard, StatusBadge } from "@/components/ui/primitives";
+import { Field, Notice, PageHeader, Section, StatCard, StatusBadge } from "@/components/ui/primitives";
 import { api, errorMessage } from "@/lib/api";
 import type { TeacherWithdrawals } from "@/lib/api-types";
 import { confirmAction } from "@/lib/confirm";
@@ -38,7 +38,7 @@ function Withdrawals({ data, reload }: { data: TeacherWithdrawals; reload: () =>
     if (value > finance.withdrawable) return setError(`You can withdraw up to ${formatBDT(finance.withdrawable)}.`);
     if (!/^01\d{9}$/.test(account)) return setError("Enter an 11-digit bKash number starting with 01.");
     setError("");
-    if (!(await confirmAction({ title: `Withdraw ${formatBDT(value)}?`, text: `To bKash ${maskNumber(account)} (simulated payout).`, confirmText: "Request" })))
+    if (!(await confirmAction({ title: `Withdraw ${formatBDT(value)}?`, text: `To bKash ${maskNumber(account)}.`, confirmText: "Request" })))
       return;
     setSubmitting(true);
     try {
@@ -108,7 +108,7 @@ function Withdrawals({ data, reload }: { data: TeacherWithdrawals; reload: () =>
           </p>
         )}
         <div className="mt-4">
-          <SimulatedNotice>Payouts are simulated. No money is sent to any bKash account.</SimulatedNotice>
+          <Notice>The Root Over team reviews each request and sends approved payouts to your bKash number.</Notice>
         </div>
       </Section>
 

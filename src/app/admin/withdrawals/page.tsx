@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { CheckCircle2, XCircle } from "lucide-react";
 import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import DataTable from "@/components/ui/DataTable";
-import { FilterSelect, PageHeader, SimulatedNotice, StatCard, StatusBadge } from "@/components/ui/primitives";
+import { FilterSelect, Notice, PageHeader, StatCard, StatusBadge } from "@/components/ui/primitives";
 import { api, errorMessage } from "@/lib/api";
 import type { AdminWithdrawalRow, AdminWithdrawals } from "@/lib/api-types";
 import { confirmAction, promptReason } from "@/lib/confirm";
@@ -25,7 +25,7 @@ export default function AdminWithdrawalsPage() {
   const process = async (w: AdminWithdrawalRow, action: "approve" | "reject", reason?: string) => {
     try {
       await api(`/admin/withdrawals/${w.id}/${action}`, { method: "POST", body: reason ? { reason } : undefined });
-      toast.success(action === "approve" ? "Withdrawal approved (simulated payout)" : "Withdrawal rejected; the amount returns to the teacher's balance");
+      toast.success(action === "approve" ? "Withdrawal marked as paid" : "Withdrawal rejected; the amount returns to the teacher's balance");
     } catch (err) {
       toast.error(errorMessage(err));
     }
@@ -33,7 +33,7 @@ export default function AdminWithdrawalsPage() {
   };
 
   const approve = async (w: AdminWithdrawalRow) => {
-    if (await confirmAction({ title: `Pay ${formatBDT(w.amount)} to ${w.teacher.name}?`, text: `Simulated bKash payout to ${w.accountNumber}.`, confirmText: "Approve" }))
+    if (await confirmAction({ title: `Pay ${formatBDT(w.amount)} to ${w.teacher.name}?`, text: `Send the money to bKash ${w.accountNumber} first: approving only records the payout.`, confirmText: "Mark as paid" }))
       await process(w, "approve");
   };
 
@@ -53,7 +53,7 @@ export default function AdminWithdrawalsPage() {
         </div>
       )}
       <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <SimulatedNotice>Approving a withdrawal doesn&apos;t send real money.</SimulatedNotice>
+        <Notice>Payouts aren&apos;t automatic: send the money by bKash, then approve to record it.</Notice>
         <FilterSelect
           label="Status"
           value={status}

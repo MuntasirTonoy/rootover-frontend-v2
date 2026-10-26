@@ -60,6 +60,8 @@ export interface PlatformConfig {
   // Preset avatar images; an avatar is one of these or the user's own upload
   avatarPresets: string[];
   payment: { provider: "bkash" | "simulated"; sandbox: boolean };
+  // Demo deployment: one-click demo logins, coupon hints, "Fill demo data"
+  demo: boolean;
 }
 
 export interface ApiUser {

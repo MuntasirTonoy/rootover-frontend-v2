@@ -3,7 +3,8 @@
 import { useState } from "react";
 import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import DataTable from "@/components/ui/DataTable";
-import { PageHeader, SearchInput, SimulatedNotice, StatCard, StatusBadge } from "@/components/ui/primitives";
+import PaymentModeNotice from "@/components/ui/PaymentModeNotice";
+import { PageHeader, SearchInput, StatCard, StatusBadge } from "@/components/ui/primitives";
 import { withQuery } from "@/lib/api";
 import type { AdminFeeRow, AdminFees } from "@/lib/api-types";
 import { formatBDT, formatDateTime, maskNumber } from "@/lib/format";
@@ -27,7 +28,7 @@ export default function RegistrationFeesPage() {
         </div>
       )}
       <div className="mb-4">
-        <SimulatedNotice>All registration fee payments are simulated bKash transactions.</SimulatedNotice>
+        <PaymentModeNotice />
       </div>
       <SearchInput
         value={query}

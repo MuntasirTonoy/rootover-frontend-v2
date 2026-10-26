@@ -27,7 +27,7 @@ export default function TransactionsPage() {
 
   return (
     <div>
-      <PageHeader title="Transactions" description="Course purchases and refunds (simulated). Totals follow the filters below." />
+      <PageHeader title="Transactions" description="Course purchases and refunds. Totals follow the filters below." />
       {totals && (
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <StatCard label="Gross sales" value={formatBDT(totals.gross)} hint={`${totals.sales} completed`} />
@@ -102,7 +102,7 @@ export default function TransactionsPage() {
                 ["Amount paid", formatBDT(viewing.amountPaid)],
                 ["Platform commission", formatBDT(viewing.commission)],
                 ["Teacher net", formatBDT(viewing.teacherNet)],
-                ["Method", `${viewing.method} (simulated)`],
+                ["Method", viewing.method],
               ] as [string, string][]
             ).map(([label, value]) => (
               <div key={label} className="flex justify-between gap-3 border-b border-border/60 pb-2">

@@ -1,7 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
-import { CreditCard, Globe, Link as LinkIcon, MapPin, Phone, Radical, Smartphone } from "lucide-react";
+import { Globe, Link as LinkIcon, MapPin, Phone, Radical, Smartphone } from "lucide-react";
 import { Facebook, Instagram, Linkedin, Twitter, Youtube } from "./BrandIcons";
+import PaymentModeNotice from "./ui/PaymentModeNotice";
 import { contact, socialLinks } from "@/lib/site-config";
 import { LEVELS } from "@/lib/types";
 
@@ -40,11 +41,7 @@ const socialIcons = [
   { match: "twitter", icon: Twitter },
 ];
 
-const paymentMethods = [
-  { label: "bKash", icon: Smartphone, color: "text-pink-600" },
-  { label: "Nagad", icon: Smartphone, color: "text-orange-600" },
-  { label: "Card", icon: CreditCard, color: "text-primary" },
-];
+const paymentMethods = [{ label: "bKash", icon: Smartphone, color: "text-pink-600" }];
 
 export default function Footer() {
   return (
@@ -136,9 +133,7 @@ export default function Footer() {
               </span>
             ))}
           </div>
-          <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-            Demo build: all payments are simulated and no real money is charged.
-          </p>
+          <PaymentModeNotice inline />
         </div>
       </div>
 
@@ -152,7 +147,7 @@ export default function Footer() {
             </span>
           </p>
           <p className="flex items-center gap-1.5 text-sm font-medium">
-            Crafted by
+            Clauding… by
             <span className="group relative inline-flex items-center gap-1.5 font-bold cursor-default">
               <Image
                 src="/apex-codes-logo.svg"

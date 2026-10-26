@@ -6,6 +6,9 @@ const TOKEN_KEY = "rootover_token";
 
 // Fired when the API rejects the stored session (expired token or banned account)
 export const SESSION_EVENT = "rootover:session-ended";
+// Fired whenever the API says the account is suspended (opening the site with a
+// banned account's token, or logging in to one); the store shows a dialog
+export const SUSPENDED_EVENT = "rootover:account-suspended";
 const BANNED_MESSAGE = "This account has been suspended by an administrator.";
 
 export class ApiError extends Error {
@@ -84,8 +87,10 @@ export async function api<T>(
     error.message ?? "Something went wrong. Please try again.",
     error.fields,
   );
+  const banned = res.status === 403 && failure.message === BANNED_MESSAGE;
+  if (banned) window.dispatchEvent(new CustomEvent(SUSPENDED_EVENT));
   // A stored token that stopped working ends the session everywhere
-  if (token && (res.status === 401 || (res.status === 403 && failure.message === BANNED_MESSAGE)))
+  if (token && (res.status === 401 || banned))
     window.dispatchEvent(new CustomEvent(SESSION_EVENT, { detail: failure.message }));
   throw failure;
 }

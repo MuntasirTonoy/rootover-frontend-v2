@@ -15,7 +15,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Admin overview" description="Platform activity. All money figures are simulated demo data." />
+      <PageHeader title="Admin overview" description="Platform activity at a glance." />
       {!ready(overview) ? <ApiStatus state={overview} /> : <Overview data={overview.data} />}
     </div>
   );

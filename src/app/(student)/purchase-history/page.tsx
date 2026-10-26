@@ -22,7 +22,7 @@ export default function PurchaseHistoryPage() {
     <div>
       <PageHeader
         title="Purchase History"
-        description="All payments here were simulated for the demo. No real money was charged."
+        description="Every course you've bought, with its payment details."
       />
 
       {purchases.length === 0 ? (
@@ -73,7 +73,7 @@ export default function PurchaseHistoryPage() {
                 header: "Payment",
                 cell: (p) => (
                   <div className="text-xs">
-                    <p className="font-semibold">{p.method} (simulated)</p>
+                    <p className="font-semibold">{p.method}</p>
                     <p className="font-mono text-muted-foreground">{p.trxId}</p>
                   </div>
                 ),

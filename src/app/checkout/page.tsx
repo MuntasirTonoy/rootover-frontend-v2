@@ -8,11 +8,13 @@ import AuthGuard from "@/components/AuthGuard";
 import CourseThumb from "@/components/course/CourseThumb";
 import LoadingAnimation from "@/components/LoadingAnimation";
 import ApiStatus, { ready } from "@/components/ui/ApiStatus";
-import { EmptyBlock, SimulatedNotice } from "@/components/ui/primitives";
+import PaymentModeNotice from "@/components/ui/PaymentModeNotice";
+import { EmptyBlock } from "@/components/ui/primitives";
 import { api, ApiError, errorMessage } from "@/lib/api";
 import type { CouponPublic, CourseDetail, PaymentStart, Quote } from "@/lib/api-types";
 import { formatBDT } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
+import { useConfig } from "@/lib/use-config";
 import { btn, field, fieldError } from "@/lib/ui";
 
 type QuoteResult = { quote: Quote; coupon: CouponPublic | null };
@@ -37,7 +39,9 @@ function Checkout() {
   const courseId = useSearchParams().get("courseId") ?? "";
   const detail = useApi<CourseDetail>(courseId ? `/courses/${courseId}` : null);
   // Demo hint: codes that currently work for this course
-  const demoCodes = useApi<string[]>(courseId ? `/checkout/coupons/${courseId}` : null).data ?? [];
+  // Demo deployments only: codes that currently work for this course
+  const demo = useConfig()?.demo;
+  const demoCodes = useApi<string[]>(demo && courseId ? `/checkout/coupons/${courseId}` : null).data ?? [];
 
   const [codeInput, setCodeInput] = useState("");
   // The price comes from the API: without a coupon first, then with the applied one
@@ -228,9 +232,7 @@ function Checkout() {
               </div>
             </div>
             <div className="mt-4">
-              <SimulatedNotice>
-                bKash sandbox: use a bKash test wallet. No real money is charged.
-              </SimulatedNotice>
+              <PaymentModeNotice />
             </div>
           </section>
         </div>
@@ -264,7 +266,9 @@ function Checkout() {
               {processing ? <Loader2 size={18} className="animate-spin" /> : <Lock size={16} />}
               {processing ? "Opening bKash..." : `Pay ${formatBDT(q.total)} with bKash`}
             </button>
-            <p className="mt-3 text-center text-[11px] text-muted-foreground">bKash sandbox · test payments only</p>
+            <div className="text-center">
+              <PaymentModeNotice inline>{(mode) => (mode === "sandbox" ? "bKash sandbox · test payments only" : "Simulated checkout · no real charge")}</PaymentModeNotice>
+            </div>
           </div>
         </aside>
       </div>

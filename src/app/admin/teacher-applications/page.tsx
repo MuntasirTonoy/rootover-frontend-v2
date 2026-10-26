@@ -7,7 +7,7 @@ import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import DataTable from "@/components/ui/DataTable";
 import { DocPreview } from "@/components/ui/FileInput";
 import Modal from "@/components/ui/Modal";
-import { FilterSelect, PageHeader, SearchInput, StatusBadge } from "@/components/ui/primitives";
+import { FilterSelect, Notice, PageHeader, SearchInput, StatusBadge } from "@/components/ui/primitives";
 import { api, errorMessage, withQuery } from "@/lib/api";
 import type { AdminApplicationDetail, AdminApplicationRow, Paginated } from "@/lib/api-types";
 import { confirmAction, promptReason } from "@/lib/confirm";
@@ -105,7 +105,7 @@ export default function TeacherApplicationsPage() {
     <div>
       <PageHeader
         title="Teacher applications"
-        description="Review → request ৳300 fee → applicant pays (simulated) → verify and approve."
+        description="Review → request ৳300 fee → applicant pays through bKash → verify and approve."
       />
       <div className="mb-4 flex flex-col sm:flex-row gap-2">
         <SearchInput value={query} onChange={filter(setQuery)} placeholder="Search applicants" className="flex-1" />
@@ -173,6 +173,7 @@ export default function TeacherApplicationsPage() {
 
 function ApplicationDetails({ detail }: { detail: AdminApplicationDetail }) {
   const { application: a, registrationFee: fee, teacher } = detail;
+  const demo = useConfig()?.demo;
   const rows: [string, string][] = [
     ["Full name", a.fullName],
     ["Account email", detail.email],
@@ -193,9 +194,7 @@ function ApplicationDetails({ detail }: { detail: AdminApplicationDetail }) {
 
   return (
     <div className="space-y-5">
-      <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
-        Demo data: identity numbers and documents are fictional.
-      </p>
+      {demo && <Notice>Demo data: identity numbers and documents are fictional.</Notice>}
       <div className="flex items-center gap-2">
         <StatusBadge status={a.status} />
         {teacher && <span className="text-sm">Teacher ID <b className="font-mono">{teacher.teacherCode}</b></span>}
@@ -235,7 +234,7 @@ function ApplicationDetails({ detail }: { detail: AdminApplicationDetail }) {
         <h3 className="mb-2 text-sm font-bold">Registration fee</h3>
         {fee ? (
           <p className="text-sm">
-            {formatBDT(fee.amount)} via {fee.method} (simulated) from {fee.payerNumber} on {formatDateTime(fee.paidAt)} ·{" "}
+            {formatBDT(fee.amount)} via {fee.method} from {fee.payerNumber} on {formatDateTime(fee.paidAt)} ·{" "}
             <span className="font-mono">{fee.trxId}</span>
           </p>
         ) : (

@@ -15,7 +15,8 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { DEMO_ACCOUNTS } from "@/lib/demo-accounts";
-import { api, ApiError, getToken, SESSION_EVENT, setToken } from "@/lib/api";
+import SuspendedDialog from "@/components/SuspendedDialog";
+import { api, ApiError, getToken, SESSION_EVENT, setToken, SUSPENDED_EVENT } from "@/lib/api";
 import type { ApiUser, Session } from "@/lib/api-types";
 import type { Role, TeacherApplication, User } from "@/lib/types";
 
@@ -70,6 +71,8 @@ const fromApi = (u: ApiUser): User => ({ ...u });
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  // A suspended account was detected (on load or at login): show the dialog
+  const [suspended, setSuspended] = useState(false);
 
   // Latest user for event handlers, synced before any of them can run
   const userRef = useRef(user);
@@ -109,13 +112,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!userRef.current) return;
       setUser(null);
       const message = (e as CustomEvent<string>).detail;
-      toast.error(message === "Please log in first." ? "Your session has ended. Please log in again." : message);
+      // A suspension gets the dialog instead (SUSPENDED_EVENT)
+      if (message === "Please log in first.") toast.error("Your session has ended. Please log in again.");
+      else if (!message.includes("suspended")) toast.error(message);
     };
+    const onSuspended = () => setSuspended(true);
     window.addEventListener("storage", onStorage);
     window.addEventListener(SESSION_EVENT, onSessionEnded);
+    window.addEventListener(SUSPENDED_EVENT, onSuspended);
     return () => {
       window.removeEventListener("storage", onStorage);
       window.removeEventListener(SESSION_EVENT, onSessionEnded);
+      window.removeEventListener(SUSPENDED_EVENT, onSuspended);
     };
   }, [loadSession]);
 
@@ -178,6 +186,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
+      <SuspendedDialog open={suspended} onClose={() => setSuspended(false)} />
     </AppContext.Provider>
   );
 }

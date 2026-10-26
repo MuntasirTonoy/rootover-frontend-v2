@@ -18,6 +18,7 @@ import {
 import { useApp } from "@/context/AppStore";
 import { ApiError, errorMessage } from "@/lib/api";
 import { DEMO_ACCOUNTS } from "@/lib/demo-accounts";
+import { useConfig } from "@/lib/use-config";
 import { dashboardPath } from "@/lib/navigation";
 import type { Role, User as AppUser } from "@/lib/types";
 import { btn, field } from "@/lib/ui";
@@ -40,6 +41,8 @@ export default function LoginPage() {
 
 function LoginForm() {
   const { login, loginAs } = useApp();
+  // One-click demo logins exist only on demo deployments (DEMO_MODE on the API)
+  const demo = useConfig()?.demo;
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect");
@@ -86,7 +89,7 @@ function LoginForm() {
 
   return (
     <div className="min-h-[calc(100vh-5rem)] flex items-center justify-center py-12 px-4">
-      <div className="w-full max-w-4xl grid md:grid-cols-2 gap-6">
+      <div className={`w-full grid gap-6 ${demo ? "max-w-4xl md:grid-cols-2" : "max-w-md"}`}>
         {/* Credentials form */}
         <div className="bg-card border border-border rounded-lg p-6 md:p-8">
           <h1 className="text-3xl font-extrabold tracking-tight text-foreground mb-1">Welcome back</h1>
@@ -159,11 +162,12 @@ function LoginForm() {
         </div>
 
         {/* Demo accounts */}
+        {demo && (
         <div className="rounded-lg border-2 border-dashed border-primary/40 bg-primary/5 p-6 md:p-8">
           <h2 className="text-lg font-extrabold text-foreground">Demo login</h2>
           <p className="text-sm text-muted-foreground mb-5">
             One click to explore each role. These fictional accounts come from the demo server&apos;s seed
-            data; payments everywhere are simulated.
+            data.
           </p>
           <div className="space-y-3">
             {DEMO_ACCOUNTS.map((account) => {
@@ -195,6 +199,7 @@ function LoginForm() {
             })}
           </div>
         </div>
+        )}
       </div>
     </div>
   );

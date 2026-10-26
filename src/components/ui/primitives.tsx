@@ -294,10 +294,11 @@ export function EmptyBlock({
   );
 }
 
-export function SimulatedNotice({ children }: { children?: ReactNode }) {
+// A small amber callout (payment mode, how payouts work, demo-only hints)
+export function Notice({ children }: { children: ReactNode }) {
   return (
     <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-800 dark:text-amber-300">
-      {children ?? "Simulated payment for demo purposes only. No real money is charged."}
+      {children}
     </div>
   );
 }

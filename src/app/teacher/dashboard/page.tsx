@@ -26,7 +26,7 @@ export default function TeacherDashboard() {
     <div className="space-y-6">
       <PageHeader
         title="Teacher dashboard"
-        description={`Teacher ID ${teacher.teacherCode} · all sales below are simulated demo data.`}
+        description={`Teacher ID ${teacher.teacherCode}`}
         actions={
           <Link href="/teacher/courses/new" className={btn.primary}>
             <Plus size={16} /> New course

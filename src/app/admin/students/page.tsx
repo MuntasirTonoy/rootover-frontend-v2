@@ -5,7 +5,11 @@ import BanToggle from "@/components/dashboard/BanToggle";
 import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import DataTable from "@/components/ui/DataTable";
 import { Avatar, FilterSelect, PageHeader, SearchInput, StatusBadge } from "@/components/ui/primitives";
-import { withQuery } from "@/lib/api";
+import { toast } from "sonner";
+import { ShieldCheck } from "lucide-react";
+import { api, errorMessage, withQuery } from "@/lib/api";
+import { confirmAction } from "@/lib/confirm";
+import { btn } from "@/lib/ui";
 import type { AdminStudentRow, Paginated } from "@/lib/api-types";
 import { formatBDT, formatDate } from "@/lib/format";
 import { useApi, useDebounced } from "@/lib/use-api";
@@ -17,6 +21,23 @@ export default function AdminStudentsPage() {
   const q = useDebounced(query.trim());
   // Newest accounts first; q matches the name or email
   const list = useApi<Paginated<AdminStudentRow>>(withQuery("/admin/students", { status, q, page, limit: 10 }));
+  // An admin is no longer a student, so the list is reloaded afterwards
+  const makeAdmin = async (u: AdminStudentRow) => {
+    const ok = await confirmAction({
+      title: `Make ${u.name} an admin?`,
+      text: "They get full access to the admin area (and are signed out once to pick it up). You can remove the role later from Admins.",
+      confirmText: "Make admin",
+    });
+    if (!ok) return;
+    try {
+      await api(`/admin/users/${u.id}/role`, { method: "PATCH", body: { role: "admin" } });
+      toast.success(`${u.name} is now an admin`);
+      list.reload();
+    } catch (err) {
+      toast.error(errorMessage(err));
+    }
+  };
+
   const filter = (set: (v: string) => void) => (v: string) => {
     set(v);
     setPage(1);
@@ -76,7 +97,12 @@ export default function AdminStudentsPage() {
               header: "Actions",
               className: "text-right",
               cell: (u) => (
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-1">
+                  {u.status === "active" && (
+                    <button onClick={() => makeAdmin(u)} className={btn.small}>
+                      <ShieldCheck size={14} /> Make admin
+                    </button>
+                  )}
                   <BanToggle
                     user={u}
                     onChange={(next) =>

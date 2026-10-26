@@ -222,8 +222,7 @@ function CourseDetails({ params }: CoursePageProps) {
           </section>
 
           <section>
-            <h2 className="text-lg font-bold mb-1">Student reviews</h2>
-            <p className="text-xs text-muted-foreground mb-4">Demo reviews for preview purposes.</p>
+            <h2 className="text-lg font-bold mb-4">Student reviews</h2>
             {course.reviews.length === 0 ? (
               <p className="text-sm text-muted-foreground">No reviews yet.</p>
             ) : (

@@ -23,7 +23,7 @@ export default function EarningsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Earnings" description="Every sale is simulated. Commission is 10% of what the student paid." />
+      <PageHeader title="Earnings" description={`Your sales and balance. The platform commission is ${config ? `${config.commissionRate * 100}%` : "a share"} of what the student paid.`} />
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard label="List value of sales" value={formatBDT(finance.listTotal)} hint={`${finance.sales} sales before discounts`} />

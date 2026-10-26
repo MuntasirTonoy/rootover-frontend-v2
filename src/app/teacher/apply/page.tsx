@@ -16,7 +16,8 @@ import {
 } from "lucide-react";
 import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import FileInput from "@/components/ui/FileInput";
-import { Field, SimulatedNotice, StatusBadge } from "@/components/ui/primitives";
+import PaymentModeNotice from "@/components/ui/PaymentModeNotice";
+import { Field, StatusBadge } from "@/components/ui/primitives";
 import { useApp, type ApplicationInput } from "@/context/AppStore";
 import { api, ApiError, errorMessage } from "@/lib/api";
 import type { MyApplication, PaymentStart } from "@/lib/api-types";
@@ -157,7 +158,7 @@ function StatusPanel({
             {paying ? "Opening bKash..." : `Pay ${formatBDT(feeAmount)} with bKash`}
           </button>
           <div className="mt-3">
-            <SimulatedNotice>bKash sandbox: use a bKash test wallet. No real money is charged.</SimulatedNotice>
+            <PaymentModeNotice />
           </div>
           {error && (
             <p className="mt-2 text-xs font-medium text-red-600" role="alert">
@@ -188,7 +189,7 @@ function StatusPanel({
       body: (
         <>
           <p>
-            Your Teacher ID is <b className="font-mono text-foreground">{teacherCode}</b> (demo). Your teacher tools are now unlocked.
+            Your Teacher ID is <b className="font-mono text-foreground">{teacherCode}</b>. Your teacher tools are now unlocked.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Link href="/teacher/dashboard" className={btn.primary}>
@@ -250,7 +251,8 @@ function ApplicationForm({ defaultName, onSubmitted }: { defaultName: string; on
   });
   const [errors, setErrors] = useState<Errors>({});
   const [submitting, setSubmitting] = useState(false);
-  const fee = useConfig()?.registrationFee;
+  const config = useConfig();
+  const fee = config?.registrationFee;
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -333,12 +335,16 @@ function ApplicationForm({ defaultName, onSubmitted }: { defaultName: string; on
         <div>
           <h2 className="font-bold text-foreground">Teacher application</h2>
           <p className="text-xs text-muted-foreground">
-            Demo only: use fictional values. Files are previewed in your browser and never uploaded.
+            {config?.demo
+              ? "Demo: use fictional values. Your documents are stored privately and only admins can open them."
+              : "Your identity numbers and documents are stored privately and only admins can open them."}
           </p>
         </div>
-        <button type="button" onClick={fillDemo} className={btn.secondary}>
-          <Sparkles size={16} /> Fill demo data
-        </button>
+        {config?.demo && (
+          <button type="button" onClick={fillDemo} className={btn.secondary}>
+            <Sparkles size={16} /> Fill demo data
+          </button>
+        )}
       </div>
 
       <div className="grid sm:grid-cols-2 gap-5">
