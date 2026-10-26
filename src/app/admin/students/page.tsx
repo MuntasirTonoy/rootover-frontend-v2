@@ -82,15 +82,6 @@ export default function AdminStudentsPage() {
             },
             { header: "Enrolled", cell: (u) => u.enrolled },
             { header: "Total spent", cell: (u) => formatBDT(u.totalSpent) },
-            {
-              header: "Teacher application",
-              cell: (u) =>
-                u.applicationStatus ? (
-                  <StatusBadge status={u.applicationStatus} />
-                ) : (
-                  <span className="text-xs text-muted-foreground">—</span>
-                ),
-            },
             { header: "Joined", cell: (u) => <span className="whitespace-nowrap">{formatDate(u.createdAt)}</span> },
             { header: "Status", cell: (u) => <StatusBadge status={u.status} /> },
             {
