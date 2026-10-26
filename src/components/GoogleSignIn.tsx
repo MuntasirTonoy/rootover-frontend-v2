@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { useApp } from "@/context/AppStore";
@@ -59,8 +58,9 @@ export default function GoogleSignIn({
 }) {
   const clientId = useConfig()?.googleClientId;
   const { loginWithGoogle } = useApp();
-  const { resolvedTheme } = useTheme();
   const box = useRef<HTMLDivElement>(null);
+  const lightBox = useRef<HTMLDivElement>(null);
+  const darkBox = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -84,36 +84,51 @@ export default function GoogleSignIn({
     loadGoogle()
       .then((google) => {
         const parent = box.current;
-        if (!live || !parent) return;
+        const light = lightBox.current;
+        const dark = darkBox.current;
+        if (!live || !parent || !light || !dark) return;
         google.accounts.id.initialize({
           client_id: clientId,
           callback: ({ credential }) => handle.current(credential),
           ux_mode: "popup",
         });
-        parent.replaceChildren();
-        google.accounts.id.renderButton(parent, {
-          type: "standard",
-          theme: resolvedTheme === "dark" ? "filled_black" : "outline",
-          size: "large",
-          text,
-          shape: "rectangular",
-          logo_alignment: "center",
-          // Google allows 200-400 px
-          width: Math.max(200, Math.min(400, Math.floor(parent.offsetWidth))),
-        });
+        // Both themes are rendered once and swapped with CSS, so switching the
+        // theme doesn't re-create Google's iframe (which made the form flicker)
+        const width = Math.max(200, Math.min(400, Math.floor(parent.offsetWidth))); // Google allows 200-400 px
+        for (const [el, theme] of [
+          [light, "outline"],
+          [dark, "filled_black"],
+        ] as const) {
+          el.replaceChildren();
+          google.accounts.id.renderButton(el, {
+            type: "standard",
+            theme,
+            size: "large",
+            text,
+            shape: "rectangular",
+            logo_alignment: "center",
+            locale: "en", // otherwise Google follows the browser's language
+            width,
+          });
+        }
       })
       .catch(() => live && setFailed(true));
     return () => {
       live = false;
     };
-  }, [clientId, resolvedTheme, text]);
+  }, [clientId, text]);
 
   if (!clientId) return null;
 
   return (
     <div>
       <div className="relative">
-        <div ref={box} className={`flex min-h-11 justify-center ${busy ? "pointer-events-none opacity-50" : ""}`} />
+        {/* color-scheme: light stops the browser painting an opaque white
+            backdrop behind Google's (light) iframe while the page is dark */}
+        <div ref={box} className={`h-11 [color-scheme:light] ${busy ? "pointer-events-none opacity-50" : ""}`}>
+          <div ref={lightBox} className="flex justify-center dark:hidden" />
+          <div ref={darkBox} className="hidden justify-center dark:flex" />
+        </div>
         {busy && (
           <div className="absolute inset-0 flex items-center justify-center">
             <Loader2 className="animate-spin text-primary" size={22} />
