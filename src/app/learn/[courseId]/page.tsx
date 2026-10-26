@@ -16,8 +16,11 @@ import {
   Lock,
   PanelRightClose,
   PanelRightOpen,
+  Star,
 } from "lucide-react";
 import CurriculumSidebar from "@/components/course/CurriculumSidebar";
+import RateCourseForm from "@/components/course/RateCourseForm";
+import Modal from "@/components/ui/Modal";
 import ReportVideoButton from "@/components/course/ReportVideoButton";
 import LoadingAnimation from "@/components/LoadingAnimation";
 import ApiStatus, { ready } from "@/components/ui/ApiStatus";
@@ -60,6 +63,7 @@ function Player({ params }: LearnPageProps) {
   const searchParams = useSearchParams();
   const requestedId = searchParams.get("lesson");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [ratingOpen, setRatingOpen] = useState(false);
   // Optimistic copies of what the student changes here, tied to the response
   // they were made on: fresh server data (reload, another course) drops them
   const [local, setLocal] = useState<{
@@ -217,13 +221,19 @@ function Player({ params }: LearnPageProps) {
           </Link>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-sm font-bold text-foreground sm:text-base">{course.title}</h1>
-            <Link
-              href={`/teachers/${teacher.id}`}
-              className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground hover:text-primary"
-            >
-              <Avatar name={teacher.name} src={teacher.avatar} size="w-4 h-4 text-[8px]" />
-              <span className="truncate">{teacher.name}</span>
-            </Link>
+            <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+              <Link href={`/teachers/${teacher.id}`} className="flex min-w-0 items-center gap-1.5 hover:text-primary">
+                <Avatar name={teacher.name} src={teacher.avatar} size="w-4 h-4 text-[8px]" />
+                <span className="truncate">{teacher.name}</span>
+              </Link>
+              {course.rating.count > 0 && (
+                <span className="flex shrink-0 items-center gap-0.5">
+                  <Star size={11} className="fill-amber-400 text-amber-400" />
+                  <b className="text-amber-500">{course.rating.average.toFixed(1)}</b>
+                  <span className="max-sm:hidden">({course.rating.count})</span>
+                </span>
+              )}
+            </div>
           </div>
           {enrollment && (
             <div className="shrink-0 text-right">
@@ -347,6 +357,15 @@ function Player({ params }: LearnPageProps) {
                           <FileText size={16} /> Notes
                         </a>
                       )}
+                      {showReport && enrollment && (
+                        <button
+                          onClick={() => setRatingOpen(true)}
+                          className={`${btn.secondary} max-sm:px-2! ${course.myReview ? "border-amber-400/50" : ""}`}
+                        >
+                          <Star size={16} className={course.myReview ? "fill-amber-400 text-amber-400" : ""} />
+                          {course.myReview ? `Rated ${course.myReview.rating}` : "Rate"}
+                        </button>
+                      )}
                       {showReport && (
                         <ReportVideoButton
                           courseId={course.id}
@@ -387,6 +406,17 @@ function Player({ params }: LearnPageProps) {
             )}
           </div>
         </main>
+
+        <Modal open={ratingOpen} onClose={() => setRatingOpen(false)} title="Rate this course" size="md">
+          <RateCourseForm
+            courseId={course.id}
+            myReview={course.myReview}
+            onSaved={() => {
+              setRatingOpen(false);
+              player.reload();
+            }}
+          />
+        </Modal>
 
         {/* Desktop curriculum panel */}
         {sidebarOpen && (

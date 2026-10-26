@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { Google } from "@/components/BrandIcons";
 import { useApp } from "@/context/AppStore";
 import { errorMessage } from "@/lib/api";
 import type { User } from "@/lib/types";
@@ -29,6 +30,12 @@ declare global {
     google?: GoogleIdentity;
   }
 }
+
+const LABELS = {
+  continue_with: "Continue with Google",
+  signup_with: "Sign up with Google",
+  signin_with: "Sign in with Google",
+};
 
 let script: Promise<GoogleIdentity> | null = null;
 
@@ -59,10 +66,10 @@ export default function GoogleSignIn({
   const clientId = useConfig()?.googleClientId;
   const { loginWithGoogle } = useApp();
   const box = useRef<HTMLDivElement>(null);
-  const lightBox = useRef<HTMLDivElement>(null);
-  const darkBox = useRef<HTMLDivElement>(null);
+  const googleBox = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [ready, setReady] = useState(false);
 
   // Google keeps the first callback; this ref always points at the latest one
   const handle = useRef<(credential: string) => void>(() => undefined);
@@ -84,33 +91,27 @@ export default function GoogleSignIn({
     loadGoogle()
       .then((google) => {
         const parent = box.current;
-        const light = lightBox.current;
-        const dark = darkBox.current;
-        if (!live || !parent || !light || !dark) return;
+        const target = googleBox.current;
+        if (!live || !parent || !target) return;
         google.accounts.id.initialize({
           client_id: clientId,
           callback: ({ credential }) => handle.current(credential),
           ux_mode: "popup",
         });
-        // Both themes are rendered once and swapped with CSS, so switching the
-        // theme doesn't re-create Google's iframe (which made the form flicker)
+        // Google's button is laid invisibly over ours at the same size, so the
+        // click is Google's but the look is ours (its iframe can't be themed)
         const width = Math.max(200, Math.min(400, Math.floor(parent.offsetWidth))); // Google allows 200-400 px
-        for (const [el, theme] of [
-          [light, "outline"],
-          [dark, "filled_black"],
-        ] as const) {
-          el.replaceChildren();
-          google.accounts.id.renderButton(el, {
-            type: "standard",
-            theme,
-            size: "large",
-            text,
-            shape: "rectangular",
-            logo_alignment: "center",
-            locale: "en", // otherwise Google follows the browser's language
-            width,
-          });
-        }
+        target.replaceChildren();
+        google.accounts.id.renderButton(target, {
+          type: "standard",
+          theme: "outline",
+          size: "large",
+          text,
+          shape: "rectangular",
+          locale: "en",
+          width,
+        });
+        setReady(true);
       })
       .catch(() => live && setFailed(true));
     return () => {
@@ -122,18 +123,26 @@ export default function GoogleSignIn({
 
   return (
     <div>
-      <div className="relative">
-        {/* color-scheme: light stops the browser painting an opaque white
-            backdrop behind Google's (light) iframe while the page is dark */}
-        <div ref={box} className={`h-11 [color-scheme:light] ${busy ? "pointer-events-none opacity-50" : ""}`}>
-          <div ref={lightBox} className="flex justify-center dark:hidden" />
-          <div ref={darkBox} className="hidden justify-center dark:flex" />
+      {/* Capped at Google's 400 px maximum so its invisible button covers ours exactly */}
+      <div
+        ref={box}
+        className={`group relative mx-auto h-11 w-full max-w-[400px] ${busy || !ready ? "pointer-events-none" : ""} ${
+          failed ? "hidden" : ""
+        }`}
+      >
+        <div
+          aria-hidden
+          className={`flex h-full w-full items-center justify-center gap-3 rounded-md border border-border bg-card text-sm font-semibold text-foreground transition-colors group-hover:bg-surface group-focus-within:ring-2 group-focus-within:ring-primary/50 ${
+            busy || !ready ? "opacity-60" : ""
+          }`}
+        >
+          {busy ? <Loader2 size={18} className="animate-spin text-primary" /> : <Google className="h-[18px] w-[18px] shrink-0" />}
+          {LABELS[text]}
         </div>
-        {busy && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Loader2 className="animate-spin text-primary" size={22} />
-          </div>
-        )}
+        <div
+          ref={googleBox}
+          className="absolute inset-0 flex items-center justify-center overflow-hidden opacity-0 [color-scheme:light]"
+        />
       </div>
       {failed && (
         <p className="mt-2 text-center text-xs text-muted-foreground">

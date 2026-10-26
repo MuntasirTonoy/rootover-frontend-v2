@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle2, Clock, PlayCircle } from "lucide-react";
+import { CheckCircle2, Clock, PlayCircle, Star } from "lucide-react";
 import CourseThumb from "./CourseThumb";
 import { Badge } from "@/components/ui/primitives";
 import { formatDate } from "@/lib/format";
@@ -41,6 +41,20 @@ export default function EnrolledCourseCard({ item, showTeacher }: { item: Enroll
         <p className="mt-1 text-[11px] sm:text-xs text-muted-foreground">
           {progress.completed}/{progress.total} lessons
           <span className="hidden sm:inline"> · {progress.percent}% complete</span>
+        </p>
+        <p className="mt-1 flex items-center gap-1 text-[11px] sm:text-xs text-muted-foreground">
+          {course.rating.count ? (
+            <>
+              <Star size={12} className="fill-amber-400 text-amber-400" />
+              <b className="text-amber-500">{course.rating.average.toFixed(1)}</b>
+              <span>({course.rating.count})</span>
+            </>
+          ) : (
+            "No ratings yet"
+          )}
+          <Link href={`/courses/${course.id}#reviews`} className="ml-auto font-semibold text-primary hover:underline">
+            Rate
+          </Link>
         </p>
 
         <p className="hidden sm:flex mt-3 text-xs text-muted-foreground items-start gap-1.5">

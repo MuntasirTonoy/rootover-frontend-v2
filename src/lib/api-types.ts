@@ -154,6 +154,8 @@ export interface CourseDetail extends Omit<CourseSummary, "teacher"> {
   published: boolean;
   chapters: ChapterPublic[];
   reviews: Review[];
+  // The signed-in student's own review, to pre-fill the rating form
+  myReview?: Review;
   teacher: TeacherPublic;
   access: { enrolled: boolean; owner: boolean; full: boolean };
   enrollment?: { progress: Progress; resumeLessonId?: string; completedLessonIds: string[] };

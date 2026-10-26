@@ -5,6 +5,7 @@ import Link from "next/link";
 import { BookOpen, CheckCircle2, Clock, Eye, Layers, Pencil, PlayCircle, Users } from "lucide-react";
 import CourseThumb from "@/components/course/CourseThumb";
 import CurriculumList from "@/components/course/CurriculumList";
+import RateCourseForm from "@/components/course/RateCourseForm";
 import TeacherCard from "@/components/course/TeacherCard";
 import LoadingAnimation from "@/components/LoadingAnimation";
 import { Badge, courseStatusLabel, EmptyBlock, Stars, StatusBadge } from "@/components/ui/primitives";
@@ -221,8 +222,18 @@ function CourseDetails({ params }: CoursePageProps) {
             </div>
           </section>
 
-          <section>
-            <h2 className="text-lg font-bold mb-4">Student reviews</h2>
+          <section id="reviews" className="scroll-mt-24">
+            <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-lg font-bold">Student reviews</h2>
+              <Stars rating={rating.average} count={rating.count} />
+            </div>
+            {/* Only students who bought the course can rate it (the API checks too) */}
+            {enrollment && user?.role === "student" && (
+              <div className="mb-5 rounded-lg border border-primary/30 bg-primary/5 p-4">
+                <h3 className="mb-3 font-bold">{course.myReview ? "Your rating" : "Rate this course"}</h3>
+                <RateCourseForm courseId={course.id} myReview={course.myReview} onSaved={detail.reload} />
+              </div>
+            )}
             {course.reviews.length === 0 ? (
               <p className="text-sm text-muted-foreground">No reviews yet.</p>
             ) : (
@@ -234,7 +245,7 @@ function CourseDetails({ params }: CoursePageProps) {
                       <span className="text-xs text-muted-foreground">{formatDate(r.date)}</span>
                     </div>
                     <Stars rating={r.rating} />
-                    <p className="mt-2 text-sm text-muted-foreground">{r.comment}</p>
+                    {r.comment && <p className="mt-2 text-sm text-muted-foreground">{r.comment}</p>}
                   </div>
                 ))}
               </div>

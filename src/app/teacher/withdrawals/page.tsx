@@ -29,7 +29,9 @@ function Withdrawals({ data, reload }: { data: TeacherWithdrawals; reload: () =>
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   // The API enforces the minimum; this only explains it before submitting
-  const minimum = useConfig()?.minWithdrawal;
+  const config = useConfig();
+  const minimum = config?.minWithdrawal;
+  const clearingDays = config?.clearingDays;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -62,7 +64,7 @@ function Withdrawals({ data, reload }: { data: TeacherWithdrawals; reload: () =>
         <StatCard label="Withdrawable balance" value={formatBDT(finance.withdrawable)} icon={Wallet} />
         <StatCard label="Pending withdrawals" value={formatBDT(finance.pendingWithdrawals)} />
         <StatCard label="Withdrawn so far" value={formatBDT(finance.withdrawn)} />
-        <StatCard label="Pending clearance" value={formatBDT(finance.pendingClearance)} hint="Not withdrawable yet" />
+        <StatCard label="Pending clearance" value={formatBDT(finance.pendingClearance)} hint={`Sales from the last ${clearingDays ?? "few"} days`} />
       </div>
 
       <Section title="Request a withdrawal">
@@ -105,6 +107,13 @@ function Withdrawals({ data, reload }: { data: TeacherWithdrawals; reload: () =>
         {minimum !== undefined && finance.withdrawable < minimum && (
           <p className="mt-2 text-sm text-muted-foreground">
             Your withdrawable balance is below the {formatBDT(minimum)} minimum.
+            {finance.pendingClearance > 0 && (
+              <>
+                {" "}
+                <b className="text-foreground">{formatBDT(finance.pendingClearance)}</b> from recent sales is still clearing: each
+                sale becomes withdrawable {clearingDays ?? "a few"} days after the purchase.
+              </>
+            )}
           </p>
         )}
         <div className="mt-4">
