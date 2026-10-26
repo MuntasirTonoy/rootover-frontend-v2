@@ -81,7 +81,7 @@ export default function AdminCoursesPage() {
   };
 
   const actions = (c: Moderated) => (
-    <div className="flex flex-wrap justify-end gap-1">
+    <div className="flex flex-nowrap items-center justify-end gap-1 whitespace-nowrap">
       {c.status === "pending" && (
         <>
           <button disabled={busy} onClick={() => change(c, "approved")} className={`${btn.small} text-green-700 dark:text-green-400`}>
@@ -148,7 +148,7 @@ export default function AdminCoursesPage() {
               header: "Actions",
               className: "text-right",
               cell: (c) => (
-                <div className="flex justify-end gap-1">
+                <div className="flex items-center justify-end gap-1 whitespace-nowrap">
                   <button onClick={() => setViewingId(c.id)} className={btn.small}>
                     <Eye size={14} /> Review
                   </button>

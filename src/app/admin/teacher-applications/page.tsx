@@ -82,7 +82,7 @@ export default function TeacherApplicationsPage() {
   };
 
   const actions = (a: TeacherApplication) => (
-    <div className="flex flex-wrap justify-end gap-1">
+    <div className="flex flex-nowrap items-center justify-end gap-1 whitespace-nowrap">
       {a.status === "pending_review" && (
         <button disabled={busy} onClick={() => act(a, "request-payment")} className={btn.small}>
           <CreditCard size={14} /> Request fee
@@ -144,7 +144,7 @@ export default function TeacherApplicationsPage() {
               header: "Actions",
               className: "text-right",
               cell: (a) => (
-                <div className="flex justify-end gap-1">
+                <div className="flex items-center justify-end gap-1 whitespace-nowrap">
                   <button onClick={() => setViewingId(a.id)} className={btn.small}>
                     <Eye size={14} /> Details
                   </button>

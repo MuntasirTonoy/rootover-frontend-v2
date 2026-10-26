@@ -104,7 +104,7 @@ export default function AdminWithdrawalsPage() {
               className: "text-right",
               cell: (w) =>
                 w.status === "pending" ? (
-                  <div className="flex justify-end gap-1">
+                  <div className="flex items-center justify-end gap-1 whitespace-nowrap">
                     <button onClick={() => approve(w)} className={`${btn.small} text-green-700 dark:text-green-400`}>
                       <CheckCircle2 size={14} /> Approve
                     </button>
