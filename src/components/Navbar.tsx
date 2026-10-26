@@ -93,8 +93,6 @@ export default function Navbar() {
   const roleLinks = user ? mobileLinks(user) : [];
   const isCurrent = (link: MenuLink) =>
     link.exact ? pathname === link.href : pathname === link.href || pathname.startsWith(`${link.href}/`);
-  // Teachers don't need the public teacher directory
-  const navLinks = user?.role === "teacher" ? publicLinks.filter((l) => l.href !== "/teachers") : publicLinks;
 
   return (
     <nav className="sticky top-0 z-50 w-full">
@@ -114,7 +112,7 @@ export default function Navbar() {
           </Link>
 
           <div className="hidden lg:flex items-center gap-7 font-medium">
-            {navLinks.map((link) => (
+            {publicLinks.map((link) => (
               <Link key={link.href} href={link.href} className={isActive(link.href)}>
                 {link.label}
               </Link>
@@ -225,7 +223,7 @@ export default function Navbar() {
 
               <div className="flex-1 overflow-y-auto space-y-6">
                 <div className="flex flex-col space-y-1">
-                  {navLinks.map((link) => (
+                  {publicLinks.map((link) => (
                     <Link
                       key={link.href}
                       href={link.href}

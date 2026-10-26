@@ -3,7 +3,6 @@
 import { Suspense, use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -12,12 +11,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Circle,
+  Clock,
   FileText,
-  ListVideo,
   Lock,
   PanelRightClose,
   PanelRightOpen,
-  X,
 } from "lucide-react";
 import CurriculumSidebar from "@/components/course/CurriculumSidebar";
 import ReportVideoButton from "@/components/course/ReportVideoButton";
@@ -62,7 +60,6 @@ function Player({ params }: LearnPageProps) {
   const searchParams = useSearchParams();
   const requestedId = searchParams.get("lesson");
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   // Optimistic copies of what the student changes here, tied to the response
   // they were made on: fresh server data (reload, another course) drops them
   const [local, setLocal] = useState<{
@@ -136,8 +133,9 @@ function Player({ params }: LearnPageProps) {
   const canBuy = published && (!user || user.role === "student");
 
   const go = (target: LessonPublic) => {
-    setDrawerOpen(false);
-    router.push(`/learn/${courseId}?lesson=${target.id}`);
+    // Picking from the curriculum below the video should land on the new lesson's details
+    router.push(`/learn/${courseId}?lesson=${target.id}`, { scroll: false });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleSave = async () => {
@@ -191,48 +189,55 @@ function Player({ params }: LearnPageProps) {
     />
   );
 
+  const isLearner = !user || user.role === "student";
+  const showSave = watchable && isLearner;
+  const showReport = watchable && user?.role === "student";
+  const showComplete = watchable && isLearner && !!enrollment;
+
+  const contentHeader = (
+    <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+      <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Course content</p>
+      <p className="text-xs text-muted-foreground">
+        {enrollment ? `${progress.completed}/${progress.total} done` : `${lessons.length} lessons`}
+      </p>
+    </div>
+  );
+
   return (
-    <div className="flex min-h-[calc(100vh-5rem)] flex-col">
+    <div className="flex min-h-[calc(100vh-5rem)] flex-col bg-background">
       {/* Course header */}
-      <div className="border-b border-border bg-card">
-        <div className="flex items-center gap-3 px-4 py-3 lg:px-6">
+      <header className="border-b border-border bg-card">
+        <div className="flex items-center gap-3 px-3 py-2.5 sm:px-4 lg:px-6">
           <Link
             href={enrollment && user?.role === "student" ? "/my-classes" : `/courses/${course.id}`}
-            className="p-2 rounded-md hover:bg-surface shrink-0"
+            className="shrink-0 rounded-md p-2 hover:bg-surface"
             aria-label="Back"
           >
             <ArrowLeft size={18} />
           </Link>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-sm sm:text-base font-bold text-foreground">{course.title}</h1>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Link href={`/teachers/${teacher.id}`} className="flex min-w-0 items-center gap-1.5 hover:text-primary">
-                <Avatar name={teacher.name} src={teacher.avatar} size="w-4 h-4 text-[8px]" />
-                <span className="truncate">{teacher.name}</span>
-              </Link>
-              {/* Progress moves here on phones; the header has no room for it */}
-              {enrollment && (
-                <span className="sm:hidden shrink-0">
-                  · <b className="text-foreground">{progress.percent}%</b>
-                </span>
-              )}
-            </div>
+            <h1 className="truncate text-sm font-bold text-foreground sm:text-base">{course.title}</h1>
+            <Link
+              href={`/teachers/${teacher.id}`}
+              className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground hover:text-primary"
+            >
+              <Avatar name={teacher.name} src={teacher.avatar} size="w-4 h-4 text-[8px]" />
+              <span className="truncate">{teacher.name}</span>
+            </Link>
           </div>
           {enrollment && (
-            <p className="hidden sm:block shrink-0 text-xs text-muted-foreground">
-              {progress.completed}/{progress.total} lessons · <b className="text-foreground">{progress.percent}%</b>
-            </p>
+            <div className="shrink-0 text-right">
+              <p className="text-sm font-extrabold leading-none text-foreground">{progress.percent}%</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {progress.completed}/{progress.total}
+                <span className="max-sm:hidden"> lessons</span>
+              </p>
+            </div>
           )}
-          <button
-            onClick={() => setDrawerOpen(true)}
-            className={`${btn.small} lg:hidden shrink-0`}
-            aria-label="Open course curriculum"
-          >
-            <ListVideo size={16} /> Lessons
-          </button>
+          {/* max-lg:hidden, not hidden + lg:inline-flex: btn.small already sets inline-flex */}
           <button
             onClick={() => setSidebarOpen((o) => !o)}
-            className={`${btn.small} hidden lg:inline-flex shrink-0`}
+            className={`${btn.small} shrink-0 max-lg:hidden`}
             aria-label={sidebarOpen ? "Hide curriculum" : "Show curriculum"}
             aria-expanded={sidebarOpen}
           >
@@ -240,13 +245,19 @@ function Player({ params }: LearnPageProps) {
             Curriculum
           </button>
         </div>
-      </div>
+        {enrollment && (
+          <div className="h-1 w-full bg-muted/20" aria-hidden>
+            <div className="h-full bg-primary transition-[width] duration-500" style={{ width: `${progress.percent}%` }} />
+          </div>
+        )}
+      </header>
 
       <div className="flex flex-1">
-        <main className="min-w-0 flex-1 sm:p-4 lg:p-6">
+        <main className="min-w-0 flex-1 lg:p-6">
           <div className={`mx-auto ${sidebarOpen ? "max-w-5xl" : "max-w-6xl"}`}>
-            {/* Edge-to-edge on phones, rounded card from sm up */}
-            <div className="aspect-video w-full overflow-hidden bg-black sm:rounded-lg sm:shadow-lg">
+            {/* Edge-to-edge and pinned under the navbar on phones/tablets, so the
+                video stays in view while scrolling the course content below */}
+            <div className="sticky top-20 z-20 aspect-video w-full overflow-hidden bg-black lg:static lg:rounded-xl lg:shadow-lg">
               {lesson && watchable ? (
                 <iframe
                   key={lesson.id}
@@ -273,95 +284,103 @@ function Player({ params }: LearnPageProps) {
             </div>
 
             {lesson && current && (
-              <div className="mt-4 sm:mt-5 px-4 sm:px-0">
-                <p className="text-xs font-semibold uppercase tracking-wide text-primary">
-                  Chapter {current.chapterIndex + 1}: {current.chapterTitle}
-                </p>
-                {/* Title and actions side by side only when there's room (lg) */}
-                <div className="mt-1 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="min-w-0">
-                    <h2 className="text-lg sm:text-xl lg:text-2xl font-extrabold text-foreground">{lesson.title}</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {formatDuration(lesson.durationMin)}
-                      {isDone && <span className="ml-2 font-semibold text-green-600">· Completed</span>}
-                      {!access.full && lesson.isPreview && <span className="ml-2 font-semibold text-primary">· Free preview</span>}
+              <div className="space-y-4 px-4 pt-4 pb-8 sm:px-6 lg:px-0 lg:pt-6">
+                {/* Lesson details */}
+                <div>
+                  <div className="flex items-center justify-between gap-3 text-xs">
+                    <p className="min-w-0 truncate font-semibold uppercase tracking-wide text-primary">
+                      Chapter {current.chapterIndex + 1} · {current.chapterTitle}
                     </p>
-                    {/* The API only sends the link to people who can watch this lesson */}
-                    {lesson.noteLink && (
-                      <a
-                        href={lesson.noteLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`${btn.small} mt-2 inline-flex`}
-                      >
-                        <FileText size={14} /> Download notes
-                      </a>
+                    <p className="shrink-0 text-muted-foreground">
+                      Lesson {current.index + 1} of {lessons.length}
+                    </p>
+                  </div>
+                  <h2 className="mt-1.5 text-xl font-extrabold leading-snug text-foreground lg:text-2xl">{lesson.title}</h2>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-surface px-2.5 py-1 text-muted-foreground">
+                      <Clock size={12} /> {formatDuration(lesson.durationMin)}
+                    </span>
+                    {isDone && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2.5 py-1 font-semibold text-green-700 dark:text-green-400">
+                        <CheckCircle2 size={12} /> Completed
+                      </span>
+                    )}
+                    {!access.full && lesson.isPreview && (
+                      <span className="rounded-full bg-primary/10 px-2.5 py-1 font-semibold text-primary">Free preview</span>
                     )}
                   </div>
-                  {/* Saving and progress tracking are learner features */}
-                  {watchable && (!user || user.role === "student") && (
-                    // Equal-width row on phones/tablets so the buttons never wrap unevenly
-                    <div className="grid auto-cols-fr grid-flow-col gap-2 lg:flex lg:shrink-0">
-                      {user?.role === "student" && (
+                </div>
+
+                {/* Actions: on phones "Mark complete" gets its own full-width row and the
+                    rest share an equal-width row; from sm up it's one toolbar */}
+                {(showComplete || showSave || showReport || lesson.noteLink) && (
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    {showComplete && (
+                      <button
+                        onClick={handleComplete}
+                        className={`${isDone ? btn.secondary : btn.primary} w-full sm:order-last sm:ml-auto sm:w-auto`}
+                        aria-pressed={isDone}
+                      >
+                        {isDone ? <CheckCircle2 size={16} className="text-green-600" /> : <Circle size={16} />}
+                        {isDone ? "Completed" : "Mark as complete"}
+                      </button>
+                    )}
+                    <div className="grid auto-cols-fr grid-flow-col gap-2 sm:flex">
+                      {showSave && (
+                        <button
+                          onClick={handleSave}
+                          className={`${btn.secondary} max-sm:px-2! ${isSaved ? "border-primary/40 text-primary" : ""}`}
+                          aria-pressed={isSaved}
+                        >
+                          <Bookmark size={16} className={isSaved ? "fill-current" : ""} />
+                          {isSaved ? "Saved" : "Save"}
+                        </button>
+                      )}
+                      {/* The API only sends the link to people who can watch this lesson */}
+                      {lesson.noteLink && (
+                        <a
+                          href={lesson.noteLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`${btn.secondary} max-sm:px-2!`}
+                        >
+                          <FileText size={16} /> Notes
+                        </a>
+                      )}
+                      {showReport && (
                         <ReportVideoButton
                           courseId={course.id}
                           lessonId={lesson.id}
                           lessonTitle={lesson.title}
                           reported={reportedIds.has(lesson.id)}
                           onReported={() => change({ reported: new Set(reportedIds).add(lesson.id) })}
-                          className="w-full max-sm:px-2!"
+                          className="max-sm:px-2!"
                         />
                       )}
-                      <button
-                        onClick={handleSave}
-                        className={`${isSaved ? btn.primary : btn.secondary} w-full max-sm:px-2!`}
-                        aria-pressed={isSaved}
-                      >
-                        <Bookmark size={16} className={isSaved ? "fill-current" : ""} />
-                        {isSaved ? "Saved" : "Save"}
-                      </button>
-                      {enrollment && (
-                        <button
-                          onClick={handleComplete}
-                          className={`${isDone ? btn.secondary : btn.primary} w-full max-sm:px-2!`}
-                          aria-pressed={isDone}
-                        >
-                          {isDone ? <CheckCircle2 size={16} className="text-green-600" /> : <Circle size={16} />}
-                          {isDone ? "Done" : <><span className="sm:hidden">Complete</span><span className="hidden sm:inline">Mark complete</span></>}
-                        </button>
-                      )}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
-                <div className="mt-6 flex items-center justify-between gap-3 border-t border-border pt-4">
-                  <button disabled={!prev} onClick={() => prev && go(prev.lesson)} className={btn.secondary}>
-                    <ChevronLeft size={16} /> <span className="hidden sm:inline">Previous</span>
-                  </button>
-                  <span className="text-xs text-muted-foreground">
-                    Lesson {current.index + 1} of {lessons.length}
-                  </span>
-                  <button disabled={!next} onClick={() => next && go(next.lesson)} className={btn.secondary}>
-                    <span className="hidden sm:inline">Next</span> <ChevronRight size={16} />
-                  </button>
-                </div>
+                {/* Previous / next */}
+                <nav className="grid grid-cols-2 gap-2 sm:gap-3" aria-label="Lesson navigation">
+                  <LessonNavButton direction="prev" target={prev?.lesson} onGo={go} />
+                  <LessonNavButton direction="next" target={next?.lesson} onGo={go} />
+                </nav>
 
                 {!access.full && canBuy && (
-                  <div className="mt-6 rounded-lg border border-primary/30 bg-primary/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex flex-col justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center">
                     <p className="text-sm">
                       You&apos;re watching a free preview. Get all {lessons.length} lessons with the full course.
                     </p>
                     <Link href={`/checkout?courseId=${course.id}`} className={`${btn.primary} shrink-0`}>
-                      Enroll now
+                      Enroll for {formatBDT(course.effectivePrice)}
                     </Link>
                   </div>
                 )}
 
-                {/* Phones and tablets have no side panel, so list the course content inline too */}
-                <section className="lg:hidden mt-6 mb-6 overflow-hidden rounded-lg border border-border bg-card">
-                  <p className="border-b border-border px-4 py-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                    Course content
-                  </p>
+                {/* Phones and tablets: the curriculum sits under the lesson (the video stays pinned above) */}
+                <section className="overflow-hidden rounded-xl border border-border bg-card lg:hidden">
+                  {contentHeader}
                   {sidebar}
                 </section>
               </div>
@@ -371,42 +390,45 @@ function Player({ params }: LearnPageProps) {
 
         {/* Desktop curriculum panel */}
         {sidebarOpen && (
-          <aside className="hidden lg:block w-[22rem] shrink-0 border-l border-border bg-card">
+          <aside className="w-[22rem] shrink-0 border-l border-border bg-card max-lg:hidden">
             <div className="sticky top-20 max-h-[calc(100vh-5rem)] overflow-y-auto">
-              <p className="border-b border-border px-4 py-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                Course content
-              </p>
+              {contentHeader}
               {sidebar}
             </div>
           </aside>
         )}
       </div>
-
-      {/* Mobile curriculum drawer */}
-      <AnimatePresence>
-        {drawerOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[90] lg:hidden">
-            <div className="absolute inset-0 bg-black/50" onClick={() => setDrawerOpen(false)} />
-            <motion.div
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 28, stiffness: 260 }}
-              className="absolute inset-y-0 right-0 flex w-[88%] max-w-sm flex-col bg-card"
-              role="dialog"
-              aria-label="Course curriculum"
-            >
-              <div className="flex items-center justify-between border-b border-border px-4 py-3">
-                <p className="font-bold">Course content</p>
-                <button onClick={() => setDrawerOpen(false)} className="p-1.5 rounded-md hover:bg-surface" aria-label="Close curriculum">
-                  <X size={18} />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto">{sidebar}</div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
+  );
+}
+
+function LessonNavButton({
+  direction,
+  target,
+  onGo,
+}: {
+  direction: "prev" | "next";
+  target?: LessonPublic;
+  onGo: (lesson: LessonPublic) => void;
+}) {
+  const isNext = direction === "next";
+  return (
+    <button
+      disabled={!target}
+      onClick={() => target && onGo(target)}
+      className={`flex min-w-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5 transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-40 ${
+        isNext ? "flex-row-reverse text-right" : "text-left"
+      }`}
+    >
+      {isNext ? <ChevronRight size={18} className="shrink-0" /> : <ChevronLeft size={18} className="shrink-0" />}
+      <span className="min-w-0">
+        <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {isNext ? "Next" : "Previous"}
+        </span>
+        <span className="block truncate text-sm font-semibold text-foreground">
+          {target ? target.title : isNext ? "End of course" : "Start of course"}
+        </span>
+      </span>
+    </button>
   );
 }
