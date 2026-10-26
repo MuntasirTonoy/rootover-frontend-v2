@@ -26,11 +26,17 @@ export const contact = {
 };
 
 export const founders = [
-  { name: "Muntasir Tonoy", role: "Co-Founder", photo: "https://i.ibb.co.com/KJrpYgY/prof-headshot.jpg" },
+  {
+    name: "Muntasir Tonoy",
+    role: "Co-Founder",
+    photo: "https://i.ibb.co.com/KJrpYgY/prof-headshot.jpg",
+    portfolio: "https://www.muntasirmahmud.com/",
+  },
   {
     name: "Ranok Raihan",
     role: "Co-Founder",
     photo: "https://i.ibb.co.com/BKyLTXXy/821523280-4609476899371154-8111223887945179363-n.jpg",
+    portfolio: "https://ranokraihan.com/",
   },
 ];
 

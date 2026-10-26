@@ -15,10 +15,10 @@ export default function CourseCard({ course }: { course: CourseSummary }) {
   return (
     <Link
       href={`/courses/${course.id}`}
-      className="group flex h-full flex-col overflow-hidden rounded-xl sm:rounded-lg border border-border bg-card hover:border-primary/50 hover:shadow-lg transition-all"
+      className="group flex h-full flex-col overflow-hidden rounded-xl sm:rounded-lg border border-border bg-card hover:border-primary/50 transition-colors"
     >
       <div className="relative">
-        <CourseThumb course={course} tallOnMobile className="group-hover:opacity-95" />
+        <CourseThumb course={course} tallOnMobile />
         {off > 0 && (
           <span className="absolute right-1.5 top-1.5 sm:right-2 sm:top-2 rounded bg-red-600 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-[11px] font-bold text-white">
             {off}% OFF

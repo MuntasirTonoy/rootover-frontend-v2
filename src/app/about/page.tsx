@@ -206,7 +206,7 @@ export default function AboutPage() {
           <p className="mb-2 text-xs font-bold uppercase tracking-widest text-primary">The people behind Root Over</p>
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-foreground">Founders</h2>
         </div>
-        <div className="mx-auto grid max-w-3xl grid-cols-1 sm:grid-cols-2 gap-6 md:gap-8">
+        <div className="mx-auto grid max-w-xl grid-cols-1 sm:grid-cols-2 gap-6">
           {founders.map((founder, i) => (
             <motion.figure
               key={founder.name}
@@ -214,9 +214,9 @@ export default function AboutPage() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: i * 0.1 }}
-              className="group overflow-hidden rounded-2xl border border-border bg-surface"
+              className="group flex flex-col items-center rounded-2xl border border-border bg-surface p-6"
             >
-              <div className="aspect-[4/5] overflow-hidden bg-card">
+              <div className="h-32 w-32 overflow-hidden rounded-full bg-card ring-4 ring-background shadow-md">
                 <img
                   src={founder.photo}
                   alt={founder.name}
@@ -224,9 +224,17 @@ export default function AboutPage() {
                   className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
                 />
               </div>
-              <figcaption className="p-5 text-center">
+              <figcaption className="mt-4 text-center">
                 <p className="text-lg font-bold text-foreground">{founder.name}</p>
                 <p className="mt-0.5 text-sm font-medium text-primary">{founder.role}</p>
+                <a
+                  href={founder.portfolio}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+                >
+                  <Globe size={14} /> Portfolio
+                </a>
               </figcaption>
             </motion.figure>
           ))}
