@@ -35,8 +35,8 @@ function courseBody(course: Course) {
     subject: course.subject,
     title: course.title,
     description: course.description,
-    // Only https links are stored; local (data:) previews wait for the uploads endpoint
-    thumbnail: course.thumbnail?.startsWith("https://") ? course.thumbnail : null,
+    // An uploaded thumbnail's url (the API checks it's this teacher's upload), or null
+    thumbnail: course.thumbnail || null,
     outcomes: course.outcomes,
     price: course.price,
     discountPrice: course.discountPrice ?? null,
@@ -48,7 +48,7 @@ function courseBody(course: Course) {
         title: l.title,
         durationMin: l.durationMin,
         videoUrl: l.videoUrl,
-        noteLink: (l as { noteLink?: string | null }).noteLink ?? null,
+        noteLink: l.noteLink?.trim() || null,
         isPreview: l.isPreview,
       })),
     })),
@@ -80,7 +80,7 @@ export function editorErrors(fields: Record<string, string>, course: Course): Re
     else if (m[2] === "lessons" && m[3] === undefined) out[`ch-${chapter.id}-lessons`] = message;
     else if (m[3] !== undefined) {
       const lesson = chapter.lessons[Number(m[3])];
-      const suffix = { title: "title", durationMin: "duration", videoUrl: "url" }[m[4]] ?? m[4];
+      const suffix = { title: "title", durationMin: "duration", videoUrl: "url", noteLink: "note" }[m[4]] ?? m[4];
       if (lesson) out[`l-${lesson.id}-${suffix}`] = message;
     }
   }

@@ -1,9 +1,10 @@
 // Response shapes of the Root Over API (backend BACKEND_SPEC section 11).
 // The mock's documents live in types.ts; these are what pages connected to the
 // API receive instead.
-import type { MonthPoint, TeacherFinance } from "./selectors";
 import type {
+  ActivityLog,
   ApplicationStatus,
+  Course,
   Coupon,
   CourseStatus,
   Enrollment,
@@ -11,13 +12,55 @@ import type {
   PaymentMethod,
   Purchase,
   RegistrationFee,
+  ReportReason,
+  ReportStatus,
   Review,
   Role,
   TeacherApplication,
   TeacherProfile,
   UserStatus,
+  WithdrawalStatus,
   Withdrawal,
 } from "./types";
+
+// Money figures are computed by the API (backend utils/finance.ts)
+export interface SalesTotals {
+  sales: number;
+  listTotal: number;
+  discounts: number;
+  gross: number;
+  commission: number;
+  teacherNet: number;
+  refunds: number;
+  refundedCount: number;
+}
+
+// teacherNet = pendingClearance + withdrawn + pendingWithdrawals + withdrawable
+export interface TeacherFinance extends SalesTotals {
+  pendingClearance: number;
+  withdrawn: number;
+  pendingWithdrawals: number;
+  withdrawable: number;
+}
+
+export interface MonthPoint {
+  month: string;
+  gross: number;
+  commission: number;
+  net: number;
+  sales: number;
+}
+
+// GET /config
+export interface PlatformConfig {
+  commissionRate: number;
+  registrationFee: number;
+  clearingDays: number;
+  minWithdrawal: number;
+  // Preset avatar images; an avatar is one of these or the user's own upload
+  avatarPresets: string[];
+  payment: { provider: "bkash" | "simulated"; sandbox: boolean };
+}
 
 export interface ApiUser {
   id: string;
@@ -193,7 +236,6 @@ export interface MyApplication {
 
 // ---------------------------------------------------------------- teacher area (/teacher)
 
-export type { MonthPoint, TeacherFinance };
 
 export interface CouponView extends Coupon {
   state: "active" | "inactive" | "expired";
@@ -209,6 +251,7 @@ export interface TeacherCourseRow {
   statusNote?: string;
   price: number;
   discountPrice?: number;
+  effectivePrice: number;
   students: number;
   net: number;
   rating: Rating;
@@ -271,3 +314,183 @@ export interface TeacherWithdrawals {
 }
 
 export type { PaymentMethod };
+
+// ---------------------------------------------------------------- admin area (/admin)
+
+
+export interface AdminOverview {
+  counts: {
+    students: number;
+    teachers: number;
+    liveCourses: number;
+    pendingCourses: number;
+    sales: number;
+    refunded: number;
+    // Totals behind the ≤5 lists below
+    pendingApplications: number;
+    pendingWithdrawals: number;
+  };
+  totals: SalesTotals;
+  registrationFees: { total: number; count: number };
+  monthly: MonthPoint[];
+  pendingApplications: { id: string; fullName: string; status: ApplicationStatus; submittedAt: string }[];
+  pendingCourses: { id: string; title: string; teacher: { id: string; name: string }; updatedAt: string }[];
+  pendingWithdrawals: { id: string; amount: number; teacher: { id: string; name: string }; requestedAt: string }[];
+  recentActivity: ActivityLog[];
+  reports: { open: number; awaitingApproval: number };
+}
+
+export interface AdminApplicationRow extends TeacherApplication {
+  email: string;
+  feePaid: boolean;
+}
+
+export interface AdminApplicationDetail {
+  application: TeacherApplication;
+  email: string;
+  registrationFee: RegistrationFee | null;
+  teacher: TeacherProfile | null;
+}
+
+export interface AdminCourseRow {
+  id: string;
+  title: string;
+  level: Level;
+  subject: string;
+  thumbnail?: string;
+  status: CourseStatus;
+  statusNote?: string;
+  price: number;
+  discountPrice?: number;
+  effectivePrice: number;
+  teacher: { id: string; name: string; teacherCode: string };
+  students: number;
+  chapterCount: number;
+  lessonCount: number;
+  durationMin: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// The full course with raw lesson links
+export interface AdminCourseDetail extends Course {
+  teacher: { id: string; name: string; teacherCode: string; status: UserStatus };
+  effectivePrice: number;
+  sales: number;
+  gross: number;
+}
+
+export interface AdminTeacherRow extends TeacherProfile {
+  name: string;
+  email: string;
+  avatar?: string;
+  status: UserStatus;
+  liveCourses: number;
+  totalCourses: number;
+  gross: number;
+  net: number;
+  withdrawable: number;
+}
+
+export interface AdminStudentRow extends ApiUser {
+  enrolled: number;
+  totalSpent: number;
+  applicationStatus: ApplicationStatus | null;
+}
+
+export interface AdminFeeRow extends RegistrationFee {
+  applicant: { fullName: string; email: string };
+  applicationStatus: ApplicationStatus;
+}
+
+export interface AdminFees extends Paginated<AdminFeeRow> {
+  totals: { collected: number; count: number; awaitingPayment: number };
+}
+
+export interface AdminTransactions extends Paginated<PurchaseView> {
+  // Over every filtered row, not just this page
+  totals: SalesTotals;
+}
+
+export interface AdminWithdrawalRow extends Withdrawal {
+  teacher: { id: string; name: string; teacherCode: string };
+  // The teacher's balance right now
+  withdrawable: number;
+}
+
+export interface AdminWithdrawals extends Paginated<AdminWithdrawalRow> {
+  sums: Record<WithdrawalStatus, { amount: number; count: number }>;
+}
+
+export interface AdminReports {
+  totals: SalesTotals;
+  registrationFees: { total: number; count: number };
+  platformRevenue: number;
+  monthly: MonthPoint[];
+  byTeacher: (TeacherFinance & { id: string; name: string })[];
+  byLevel: (SalesTotals & { level: Level })[];
+}
+
+// ---------------------------------------------------------------- payments (bKash)
+
+// POST /checkout and /teacher-applications/:id/pay-fee: send the browser to redirectURL
+export interface PaymentStart {
+  paymentId: string;
+  redirectURL: string;
+}
+
+export type PaymentState = "initiated" | "processing" | "completed" | "failed" | "cancelled" | "expired";
+
+// GET /payments/:id (the payer's own payment)
+export interface PaymentView {
+  id: string;
+  purpose: "course_purchase" | "registration_fee";
+  provider: "bkash" | "simulated";
+  sandbox: boolean;
+  state: PaymentState;
+  amount: number;
+  trxId?: string;
+  payerNumber?: string;
+  failureReason?: string;
+  course?: { id: string; title: string };
+  applicationId?: string;
+  purchase?: Purchase;
+  enrollment?: Enrollment;
+  registrationFee?: RegistrationFee;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ---------------------------------------------------------------- video reports
+
+export interface VideoReportView {
+  id: string;
+  reason: ReportReason;
+  description?: string;
+  status: ReportStatus;
+  teacherNote?: string;
+  adminNote?: string;
+  createdAt: string;
+  updatedAt: string;
+  fixSubmittedAt?: string;
+  resolvedAt?: string;
+  course: { id: string; title: string };
+  chapter: { id: string; title: string };
+  // Full link: only the teacher, admins and the reporter receive reports
+  lesson: { id: string; title: string; videoUrl: string };
+  teacher: { id: string; name: string };
+  reporter: { id: string; name: string };
+  events: {
+    id: string;
+    type: "reported" | "fix_submitted" | "fix_approved" | "fix_rejected";
+    actorName: string;
+    actorRole: Role | "system";
+    note?: string;
+    at: string;
+  }[];
+}
+
+// GET /teacher/reports and /admin/video-reports; counts cover every report the role can see
+export interface VideoReportBoard extends Paginated<VideoReportView> {
+  counts: { needsFix: number; awaitingApproval: number; resolved: number };
+}

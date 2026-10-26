@@ -16,21 +16,21 @@ import {
   Save,
   Send,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
 import CourseThumb from "./CourseThumb";
 import CurriculumList from "./CurriculumList";
 import { Avatar, Badge, courseStatusLabel, Field, StatusBadge } from "@/components/ui/primitives";
-import { ApiError, errorMessage } from "@/lib/api";
-import type { TeacherPublic } from "@/lib/api-types";
+import { api, ApiError, errorMessage, withQuery } from "@/lib/api";
+import type { Quote, TeacherPublic } from "@/lib/api-types";
 import { confirmAction } from "@/lib/confirm";
 import { formatBDT, formatDuration, uid } from "@/lib/format";
-import { quote } from "@/lib/pricing";
-import { courseDuration, lessonCount } from "@/lib/selectors";
 import { LEVELS, type Chapter, type Course, type Lesson } from "@/lib/types";
 import { btn, field, fieldError } from "@/lib/ui";
+import { uploadFile } from "@/lib/uploads";
+import { useApi, useDebounced } from "@/lib/use-api";
 import { editorErrors, saveCourse, submitCourse } from "@/lib/use-teacher";
-import { toEmbedUrl } from "@/lib/youtube";
 
 type Errors = Record<string, string>;
 
@@ -87,7 +87,9 @@ function validateCurriculum(c: Course): Errors {
     ch.lessons.forEach((l) => {
       if (!l.title.trim()) e[`l-${l.id}-title`] = "Lesson title is required.";
       if (!(l.durationMin > 0)) e[`l-${l.id}-duration`] = "Enter a duration in minutes.";
-      if (!toEmbedUrl(l.videoUrl)) e[`l-${l.id}-url`] = "Enter a valid YouTube link or embed code.";
+      if (!l.videoUrl.trim()) e[`l-${l.id}-url`] = "Enter a valid YouTube link or embed code.";
+      if (l.noteLink?.trim() && !/^https:\/\/\S+$/.test(l.noteLink.trim()))
+        e[`l-${l.id}-note`] = "Enter a valid https link for the notes.";
     });
   });
   return e;
@@ -108,9 +110,24 @@ export default function CourseWizard({ initial, teacher, isNew }: CourseWizardPr
   const [step, setStep] = useState(0);
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
-  const [previewing, setPreviewing] = useState<string | null>(null);
 
   const update = (patch: Partial<Course>) => setCourse((c) => ({ ...c, ...patch }));
+  const [uploadingThumb, setUploadingThumb] = useState(false);
+
+  // Uploaded straight away; the course references it once saved
+  const pickThumbnail = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingThumb(true);
+    try {
+      update({ thumbnail: (await uploadFile(file, "thumbnail")).url });
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setUploadingThumb(false);
+    }
+  };
   const updateChapter = (id: string, patch: Partial<Chapter>) =>
     update({ chapters: course.chapters.map((ch) => (ch.id === id ? { ...ch, ...patch } : ch)) });
   const updateLesson = (chapterId: string, lessonId: string, patch: Partial<Lesson>) =>
@@ -146,10 +163,6 @@ export default function CourseWizard({ initial, teacher, isNew }: CourseWizardPr
     title: course.title.trim(),
     subject: course.subject.trim(),
     outcomes: course.outcomes.map((o) => o.trim()).filter(Boolean),
-    chapters: course.chapters.map((ch) => ({
-      ...ch,
-      lessons: ch.lessons.map((l) => ({ ...l, videoUrl: toEmbedUrl(l.videoUrl) ?? l.videoUrl })),
-    })),
   });
 
   // Shows every missing field and jumps to the first step that has one
@@ -226,7 +239,13 @@ export default function CourseWizard({ initial, teacher, isNew }: CourseWizardPr
   };
 
   const err = (key: string) => errors[key];
-  const earnings = quote(course);
+  // What students pay and the teacher earns comes from the API (it owns the money maths)
+  const priceKey = useDebounced(`${course.price}|${course.discountPrice ?? ""}`);
+  const [price, discountPrice] = priceKey.split("|");
+  const earnings = useApi<Quote>(
+    Number(price) > 0 ? withQuery("/teacher/price-preview", { price, discountPrice }) : null,
+  ).data;
+  const lessons = course.chapters.flatMap((ch) => ch.lessons);
 
   return (
     <div>
@@ -359,23 +378,39 @@ export default function CourseWizard({ initial, teacher, isNew }: CourseWizardPr
           </div>
           {Number.isFinite(course.price) && course.price > 0 && (
             <p className="rounded-md bg-surface px-3 py-2 text-xs text-muted-foreground">
-              Students pay <b className="text-foreground">{formatBDT(earnings.total)}</b>. After the 10% platform commission (
-              {formatBDT(earnings.commission)}) you earn <b className="text-foreground">{formatBDT(earnings.teacherNet)}</b> per sale
+              Students pay <b className="text-foreground">{formatBDT(earnings?.total)}</b>. After the platform commission (
+              {formatBDT(earnings?.commission)}) you earn <b className="text-foreground">{formatBDT(earnings?.teacherNet)}</b> per sale
               before coupons.
             </p>
           )}
 
-          {/* Uploads aren't connected yet; the generated level cover is used meanwhile */}
+          {/* Without a thumbnail the course shows a cover generated from its level and subject */}
           <div>
             <span className="block text-sm font-semibold mb-1.5">Course thumbnail</span>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="w-40 shrink-0 overflow-hidden rounded-md border border-border">
                 <CourseThumb course={course} />
               </div>
-              <p className="text-xs text-muted-foreground">
-                Uploading your own thumbnail is coming soon. Until then the course uses a cover generated from its level and
-                subject.
-              </p>
+              <div className="flex flex-col items-start gap-2">
+                <label className={`${btn.small} cursor-pointer`}>
+                  {uploadingThumb ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                  {uploadingThumb ? "Uploading..." : course.thumbnail ? "Replace image" : "Upload image"}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={pickThumbnail}
+                    disabled={uploadingThumb}
+                    className="sr-only"
+                  />
+                </label>
+                {course.thumbnail && (
+                  <button type="button" onClick={() => update({ thumbnail: undefined })} className="text-xs text-red-600 hover:underline">
+                    Use the generated cover
+                  </button>
+                )}
+                <p className="text-xs text-muted-foreground">JPG, PNG or WebP, up to 5 MB. 16:9 looks best.</p>
+                {err("thumbnail") && <p className="text-xs text-red-600">{err("thumbnail")}</p>}
+              </div>
             </div>
           </div>
 
@@ -438,8 +473,6 @@ export default function CourseWizard({ initial, teacher, isNew }: CourseWizardPr
 
               <div className="divide-y divide-border">
                 {chapter.lessons.map((lesson, li) => {
-                  const embed = toEmbedUrl(lesson.videoUrl);
-                  const urlError = err(`l-${lesson.id}-url`) || (lesson.videoUrl && !embed ? "This doesn't look like a YouTube link." : "");
                   return (
                     <div key={lesson.id} className="p-3 space-y-3">
                       <div className="flex flex-wrap items-start gap-2">
@@ -498,37 +531,23 @@ export default function CourseWizard({ initial, teacher, isNew }: CourseWizardPr
                         </div>
                       </div>
                       <div className="sm:pl-14">
-                        <div className="flex gap-2">
-                          <input
-                            value={lesson.videoUrl}
-                            placeholder="YouTube unlisted URL or <iframe> embed code"
-                            aria-label={`Part ${li + 1} video URL`}
-                            onChange={(e) => updateLesson(chapter.id, lesson.id, { videoUrl: e.target.value })}
-                            className={`${field} font-mono text-xs ${urlError ? fieldError : ""}`}
-                          />
-                          <button
-                            type="button"
-                            disabled={!embed}
-                            onClick={() => setPreviewing(previewing === lesson.id ? null : lesson.id)}
-                            className={btn.small}
-                            aria-label={previewing === lesson.id ? "Hide video preview" : "Show video preview"}
-                          >
-                            {previewing === lesson.id ? <EyeOff size={14} /> : <Eye size={14} />}
-                          </button>
-                        </div>
-                        {urlError ? (
-                          <p className="mt-1 text-xs text-red-600">{urlError}</p>
-                        ) : (
-                          embed && (
-                            <p className="mt-1 flex items-center gap-1 text-xs text-green-600">
-                              <CheckCircle2 size={12} /> Valid YouTube video
-                            </p>
-                          )
-                        )}
-                        {previewing === lesson.id && embed && (
-                          <div className="mt-2 aspect-video w-full max-w-md overflow-hidden rounded-md bg-black">
-                            <iframe src={embed} title={`Preview: ${lesson.title}`} className="h-full w-full" allowFullScreen />
-                          </div>
+                        <VideoLinkField
+                          value={lesson.videoUrl}
+                          label={`Part ${li + 1} video URL`}
+                          title={lesson.title}
+                          error={err(`l-${lesson.id}-url`)}
+                          onChange={(videoUrl) => updateLesson(chapter.id, lesson.id, { videoUrl })}
+                        />
+                        {/* Optional lesson notes (PDF, Google Drive...); only buyers and preview viewers get the link */}
+                        <input
+                          value={lesson.noteLink ?? ""}
+                          placeholder="Notes link (optional): https://..."
+                          aria-label={`Part ${li + 1} notes link`}
+                          onChange={(e) => updateLesson(chapter.id, lesson.id, { noteLink: e.target.value })}
+                          className={`${field} mt-2 text-xs ${err(`l-${lesson.id}-note`) ? fieldError : ""}`}
+                        />
+                        {err(`l-${lesson.id}-note`) && (
+                          <p className="mt-1 text-xs text-red-600">{err(`l-${lesson.id}-note`)}</p>
                         )}
                       </div>
                     </div>
@@ -567,12 +586,12 @@ export default function CourseWizard({ initial, teacher, isNew }: CourseWizardPr
               <h2 className="text-xl font-extrabold">{course.title || "Untitled course"}</h2>
               <p className="mt-1 text-sm text-muted-foreground">{course.description}</p>
               <p className="mt-2 text-sm text-muted-foreground">
-                {course.chapters.length} chapters · {lessonCount(course)} lessons · {formatDuration(courseDuration(course))}
+                {course.chapters.length} chapters · {lessons.length} lessons · {formatDuration(lessons.reduce((m, l) => m + l.durationMin, 0))}
               </p>
               <div className="mt-3 flex items-baseline gap-2">
-                <span className="text-2xl font-extrabold">{formatBDT(earnings.coursePrice)}</span>
-                {earnings.courseDiscount > 0 && <span className="text-muted-foreground line-through">{formatBDT(course.price)}</span>}
-                <span className="text-xs text-muted-foreground">· you earn {formatBDT(earnings.teacherNet)} per sale</span>
+                <span className="text-2xl font-extrabold">{formatBDT(earnings?.coursePrice)}</span>
+                {!!earnings?.courseDiscount && <span className="text-muted-foreground line-through">{formatBDT(course.price)}</span>}
+                <span className="text-xs text-muted-foreground">· you earn {formatBDT(earnings?.teacherNet)} per sale</span>
               </div>
             </div>
           </div>
@@ -648,5 +667,84 @@ function IconButton({
     >
       {children}
     </button>
+  );
+}
+
+// The lesson's video link. The backend owns YouTube parsing: "Check" asks
+// GET /teacher/video-link for the embed form, then previews it. Saving
+// normalises valid links and submitting rejects invalid ones (shown as `error`).
+function VideoLinkField({
+  value,
+  label,
+  title,
+  error,
+  onChange,
+}: {
+  value: string;
+  label: string;
+  title: string;
+  error?: string;
+  onChange: (value: string) => void;
+}) {
+  const [check, setCheck] = useState<{ value: string; embedUrl?: string; error?: string } | null>(null);
+  const [open, setOpen] = useState(false);
+  const [checking, setChecking] = useState(false);
+  // A result only counts for the text it was made for
+  const result = check?.value === value ? check : null;
+  const shownError = error || result?.error;
+
+  const toggle = async () => {
+    if (open) return setOpen(false);
+    if (result?.embedUrl) return setOpen(true);
+    setChecking(true);
+    try {
+      const { embedUrl } = await api<{ embedUrl: string }>(withQuery("/teacher/video-link", { url: value }));
+      setCheck({ value, embedUrl });
+      setOpen(true);
+    } catch (err) {
+      setCheck({ value, error: errorMessage(err) });
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="flex gap-2">
+        <input
+          value={value}
+          placeholder="YouTube unlisted URL or <iframe> embed code"
+          aria-label={label}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setOpen(false);
+          }}
+          className={`${field} font-mono text-xs ${shownError ? fieldError : ""}`}
+        />
+        <button
+          type="button"
+          disabled={!value.trim() || checking}
+          onClick={toggle}
+          className={btn.small}
+          aria-label={open ? "Hide video preview" : "Check and preview the video"}
+        >
+          {checking ? <Loader2 size={14} className="animate-spin" /> : open ? <EyeOff size={14} /> : <Eye size={14} />}
+        </button>
+      </div>
+      {shownError ? (
+        <p className="mt-1 text-xs text-red-600">{shownError}</p>
+      ) : (
+        result?.embedUrl && (
+          <p className="mt-1 flex items-center gap-1 text-xs text-green-600">
+            <CheckCircle2 size={12} /> Valid YouTube video
+          </p>
+        )
+      )}
+      {open && result?.embedUrl && (
+        <div className="mt-2 aspect-video w-full max-w-md overflow-hidden rounded-md bg-black">
+          <iframe src={result.embedUrl} title={`Preview: ${title}`} className="h-full w-full" allowFullScreen />
+        </div>
+      )}
+    </>
   );
 }

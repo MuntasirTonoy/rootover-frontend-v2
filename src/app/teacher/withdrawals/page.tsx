@@ -10,7 +10,7 @@ import { api, errorMessage } from "@/lib/api";
 import type { TeacherWithdrawals } from "@/lib/api-types";
 import { confirmAction } from "@/lib/confirm";
 import { formatBDT, formatDateTime, maskNumber } from "@/lib/format";
-import { MIN_WITHDRAWAL } from "@/lib/pricing";
+import { useConfig } from "@/lib/use-config";
 import type { Withdrawal } from "@/lib/types";
 import { btn, field, fieldError } from "@/lib/ui";
 import { useApi } from "@/lib/use-api";
@@ -28,11 +28,13 @@ function Withdrawals({ data, reload }: { data: TeacherWithdrawals; reload: () =>
   const [account, setAccount] = useState(data.defaultAccount);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // The API enforces the minimum; this only explains it before submitting
+  const minimum = useConfig()?.minWithdrawal;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const value = Number(amount);
-    if (!Number.isInteger(value) || value < MIN_WITHDRAWAL) return setError(`Enter a whole amount of at least ${formatBDT(MIN_WITHDRAWAL)}.`);
+    if (!Number.isInteger(value) || value < (minimum ?? 0)) return setError(`Enter a whole amount of at least ${formatBDT(minimum)}.`);
     if (value > finance.withdrawable) return setError(`You can withdraw up to ${formatBDT(finance.withdrawable)}.`);
     if (!/^01\d{9}$/.test(account)) return setError("Enter an 11-digit bKash number starting with 01.");
     setError("");
@@ -65,11 +67,11 @@ function Withdrawals({ data, reload }: { data: TeacherWithdrawals; reload: () =>
 
       <Section title="Request a withdrawal">
         <form onSubmit={submit} noValidate className="grid sm:grid-cols-3 gap-4 items-start">
-          <Field label="Amount (৳)" htmlFor="amount" hint={`Minimum ${formatBDT(MIN_WITHDRAWAL)}`}>
+          <Field label="Amount (৳)" htmlFor="amount" hint={`Minimum ${formatBDT(minimum)}`}>
             <input
               id="amount"
               type="number"
-              min={MIN_WITHDRAWAL}
+              min={minimum}
               max={finance.withdrawable}
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
@@ -86,7 +88,7 @@ function Withdrawals({ data, reload }: { data: TeacherWithdrawals; reload: () =>
             />
           </Field>
           <div className="sm:pt-7 flex gap-2">
-            <button type="submit" disabled={submitting || finance.withdrawable < MIN_WITHDRAWAL} className={`${btn.primary} flex-1`}>
+            <button type="submit" disabled={submitting || (minimum !== undefined && finance.withdrawable < minimum)} className={`${btn.primary} flex-1`}>
               {submitting && <Loader2 size={16} className="animate-spin" />}
               Request payout
             </button>
@@ -100,9 +102,9 @@ function Withdrawals({ data, reload }: { data: TeacherWithdrawals; reload: () =>
             {error}
           </p>
         )}
-        {finance.withdrawable < MIN_WITHDRAWAL && (
+        {minimum !== undefined && finance.withdrawable < minimum && (
           <p className="mt-2 text-sm text-muted-foreground">
-            Your withdrawable balance is below the {formatBDT(MIN_WITHDRAWAL)} minimum.
+            Your withdrawable balance is below the {formatBDT(minimum)} minimum.
           </p>
         )}
         <div className="mt-4">

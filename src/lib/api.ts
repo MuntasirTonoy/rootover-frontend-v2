@@ -55,15 +55,17 @@ export async function api<T>(
   init: { method?: string; body?: unknown; query?: Query; signal?: AbortSignal } = {},
 ): Promise<T> {
   const token = getToken();
+  // FormData (file uploads) goes as multipart; the browser sets its own Content-Type
+  const multipart = init.body instanceof FormData;
   let res: Response;
   try {
     res = await fetch(API_URL + withQuery(path, init.query), {
       method: init.method ?? "GET",
       headers: {
-        ...(init.body !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...(init.body !== undefined && !multipart ? { "Content-Type": "application/json" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      body: init.body === undefined ? undefined : multipart ? (init.body as FormData) : JSON.stringify(init.body),
       signal: init.signal,
     });
   } catch (err) {

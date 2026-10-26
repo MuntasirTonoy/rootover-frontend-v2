@@ -4,7 +4,7 @@ import type { BulletPoint, SocialLink } from "./types";
 export const banner = {
   title: `Learn Smarter<br/><span class="text-primary">with Root Over Education</span>`,
   subtitle:
-    "SSC, HSC, BSc, BBA and BA courses taught by verified teachers. Buy a full course once and learn chapter by chapter.",
+    "Master Every Subject with Confidence! Learn from trusted teachers, build strong fundamentals, and achieve your academic goals with ease—all on the country’s largest learning platform.",
   logoUrl: "",
 };
 

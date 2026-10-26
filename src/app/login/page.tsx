@@ -12,14 +12,13 @@ import {
   Lock,
   LogIn,
   Mail,
-  RotateCcw,
   ShieldCheck,
   User,
 } from "lucide-react";
 import { useApp } from "@/context/AppStore";
 import { ApiError, errorMessage } from "@/lib/api";
-import { DEMO_ACCOUNTS } from "@/lib/seed";
-import { dashboardPath } from "@/lib/selectors";
+import { DEMO_ACCOUNTS } from "@/lib/demo-accounts";
+import { dashboardPath } from "@/lib/navigation";
 import type { Role, User as AppUser } from "@/lib/types";
 import { btn, field } from "@/lib/ui";
 
@@ -40,7 +39,7 @@ export default function LoginPage() {
 }
 
 function LoginForm() {
-  const { login, loginAs, resetDemo } = useApp();
+  const { login, loginAs } = useApp();
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect");
@@ -195,10 +194,6 @@ function LoginForm() {
               );
             })}
           </div>
-          {/* Only affects the screens that still run on browser demo data (admin, video reports) */}
-          <button onClick={resetDemo} className={`${btn.ghost} mt-5`}>
-            <RotateCcw size={14} /> Reset browser demo data
-          </button>
         </div>
       </div>
     </div>

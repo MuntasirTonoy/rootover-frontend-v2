@@ -3,16 +3,19 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { CheckCircle2, CreditCard, Eye, XCircle } from "lucide-react";
+import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import DataTable from "@/components/ui/DataTable";
 import { DocPreview } from "@/components/ui/FileInput";
 import Modal from "@/components/ui/Modal";
 import { FilterSelect, PageHeader, SearchInput, StatusBadge } from "@/components/ui/primitives";
-import { useApp } from "@/context/AppStore";
+import { api, errorMessage, withQuery } from "@/lib/api";
+import type { AdminApplicationDetail, AdminApplicationRow, Paginated } from "@/lib/api-types";
 import { confirmAction, promptReason } from "@/lib/confirm";
 import { formatBDT, formatDate, formatDateTime } from "@/lib/format";
-import { getUser } from "@/lib/selectors";
+import { useConfig } from "@/lib/use-config";
 import type { TeacherApplication } from "@/lib/types";
 import { btn } from "@/lib/ui";
+import { useApi, useDebounced } from "@/lib/use-api";
 
 const statusOptions = [
   { value: "", label: "All statuses" },
@@ -23,58 +26,75 @@ const statusOptions = [
   { value: "rejected", label: "Rejected" },
 ];
 
+type Action = "request-payment" | "approve" | "reject";
+
 export default function TeacherApplicationsPage() {
-  const { db, reviewApplication } = useApp();
   const [status, setStatus] = useState("");
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [viewingId, setViewingId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const config = useConfig();
+  const q = useDebounced(query.trim());
+  // Newest first; q matches the applicant's name or account email
+  const list = useApi<Paginated<AdminApplicationRow>>(withQuery("/admin/teacher-applications", { status, q, page, limit: 10 }));
+  const viewing = useApi<AdminApplicationDetail>(viewingId && `/admin/teacher-applications/${viewingId}`);
+  const filter = (set: (v: string) => void) => (v: string) => {
+    set(v);
+    setPage(1);
+  };
 
-  const q = query.trim().toLowerCase();
-  const rows = db.applications
-    .filter((a) => (!status || a.status === status) && (!q || a.fullName.toLowerCase().includes(q)))
-    .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
-  const viewing = db.applications.find((a) => a.id === viewingId);
-
-  const act = async (a: TeacherApplication, action: "request_payment" | "approve" | "reject") => {
+  const act = async (a: TeacherApplication, action: Action) => {
+    let body: { reason: string } | undefined;
+    let done: string;
     if (action === "reject") {
       const reason = await promptReason({ title: `Reject ${a.fullName}'s application?`, confirmText: "Reject" });
       if (!reason) return;
-      reviewApplication(a.id, "reject", reason);
-      toast.success("Application rejected");
-      return;
+      body = { reason };
+      done = "Application rejected";
+    } else {
+      const copy = {
+        "request-payment": {
+          title: "Pass review and request the fee?",
+          text: `${a.fullName} will be asked to pay the ${formatBDT(config?.registrationFee)} registration fee through bKash.`,
+          done: "Registration fee requested",
+        },
+        approve: {
+          title: `Approve ${a.fullName} as a teacher?`,
+          text: "A Teacher ID is generated and teacher tools unlock for this account.",
+          done: "Teacher approved",
+        },
+      }[action];
+      if (!(await confirmAction({ title: copy.title, text: copy.text, confirmText: "Confirm" }))) return;
+      done = copy.done;
     }
-    const copy = {
-      request_payment: {
-        title: "Pass review and request the fee?",
-        text: `${a.fullName} will be asked to pay the ${formatBDT(300)} registration fee (simulated).`,
-        done: "Registration fee requested",
-      },
-      approve: {
-        title: `Approve ${a.fullName} as a teacher?`,
-        text: "A Teacher ID is generated and teacher tools unlock for this account.",
-        done: "Teacher approved",
-      },
-    }[action];
-    if (await confirmAction({ title: copy.title, text: copy.text, confirmText: "Confirm" })) {
-      reviewApplication(a.id, action);
-      toast.success(copy.done);
+    setBusy(true);
+    try {
+      await api(`/admin/teacher-applications/${a.id}/${action}`, { method: "POST", body });
+      toast.success(done);
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setBusy(false);
     }
+    list.reload();
+    if (viewingId === a.id) viewing.reload();
   };
 
   const actions = (a: TeacherApplication) => (
     <div className="flex flex-wrap justify-end gap-1">
       {a.status === "pending_review" && (
-        <button onClick={() => act(a, "request_payment")} className={btn.small}>
+        <button disabled={busy} onClick={() => act(a, "request-payment")} className={btn.small}>
           <CreditCard size={14} /> Request fee
         </button>
       )}
       {a.status === "under_verification" && (
-        <button onClick={() => act(a, "approve")} className={`${btn.small} text-green-700 dark:text-green-400`}>
+        <button disabled={busy} onClick={() => act(a, "approve")} className={`${btn.small} text-green-700 dark:text-green-400`}>
           <CheckCircle2 size={14} /> Approve
         </button>
       )}
       {["pending_review", "payment_required", "under_verification"].includes(a.status) && (
-        <button onClick={() => act(a, "reject")} className={`${btn.small} text-red-600`}>
+        <button disabled={busy} onClick={() => act(a, "reject")} className={`${btn.small} text-red-600`}>
           <XCircle size={14} /> Reject
         </button>
       )}
@@ -88,65 +108,74 @@ export default function TeacherApplicationsPage() {
         description="Review → request ৳300 fee → applicant pays (simulated) → verify and approve."
       />
       <div className="mb-4 flex flex-col sm:flex-row gap-2">
-        <SearchInput value={query} onChange={setQuery} placeholder="Search applicants" className="flex-1" />
-        <FilterSelect label="Status" value={status} onChange={setStatus} options={statusOptions} />
+        <SearchInput value={query} onChange={filter(setQuery)} placeholder="Search applicants" className="flex-1" />
+        <FilterSelect label="Status" value={status} onChange={filter(setStatus)} options={statusOptions} />
       </div>
-      <DataTable<TeacherApplication>
-        rows={rows}
-        rowKey={(a) => a.id}
-        emptyTitle="No applications"
-        columns={[
-          {
-            header: "Applicant",
-            cell: (a) => (
-              <div className="min-w-[160px]">
-                <p className="font-semibold">{a.fullName}</p>
-                <p className="text-xs text-muted-foreground">{getUser(db, a.userId)?.email}</p>
-              </div>
-            ),
-          },
-          { header: "Submitted", cell: (a) => <span className="whitespace-nowrap">{formatDate(a.submittedAt)}</span> },
-          {
-            header: "Fee",
-            cell: (a) =>
-              db.registrationFees.some((f) => f.applicationId === a.id) ? (
-                <StatusBadge status="completed" label="Paid" />
-              ) : (
-                <span className="text-xs text-muted-foreground">Not paid</span>
+      {!ready(list) ? (
+        <ApiStatus state={list} />
+      ) : (
+        <DataTable<AdminApplicationRow>
+          rows={list.data.data}
+          rowKey={(a) => a.id}
+          emptyTitle="No applications"
+          serverPage={{ ...list.data.pagination, onPageChange: setPage, loading: list.loading }}
+          columns={[
+            {
+              header: "Applicant",
+              cell: (a) => (
+                <div className="min-w-[160px]">
+                  <p className="font-semibold">{a.fullName}</p>
+                  <p className="text-xs text-muted-foreground">{a.email}</p>
+                </div>
               ),
-          },
-          { header: "Status", cell: (a) => <StatusBadge status={a.status} /> },
-          {
-            header: "Actions",
-            className: "text-right",
-            cell: (a) => (
-              <div className="flex justify-end gap-1">
-                <button onClick={() => setViewingId(a.id)} className={btn.small}>
-                  <Eye size={14} /> Details
-                </button>
-                {actions(a)}
-              </div>
-            ),
-          },
-        ]}
-      />
+            },
+            { header: "Submitted", cell: (a) => <span className="whitespace-nowrap">{formatDate(a.submittedAt)}</span> },
+            {
+              header: "Fee",
+              cell: (a) =>
+                a.feePaid ? (
+                  <StatusBadge status="completed" label="Paid" />
+                ) : (
+                  <span className="text-xs text-muted-foreground">Not paid</span>
+                ),
+            },
+            { header: "Status", cell: (a) => <StatusBadge status={a.status} /> },
+            {
+              header: "Actions",
+              className: "text-right",
+              cell: (a) => (
+                <div className="flex justify-end gap-1">
+                  <button onClick={() => setViewingId(a.id)} className={btn.small}>
+                    <Eye size={14} /> Details
+                  </button>
+                  {actions(a)}
+                </div>
+              ),
+            },
+          ]}
+        />
+      )}
 
-      {viewing && (
-        <Modal open onClose={() => setViewingId(null)} title={`Application: ${viewing.fullName}`} size="xl" footer={actions(viewing)}>
-          <ApplicationDetails application={viewing} />
+      {viewingId && (
+        <Modal
+          open
+          onClose={() => setViewingId(null)}
+          title={`Application: ${viewing.data?.application.fullName ?? ""}`}
+          size="xl"
+          footer={viewing.data && actions(viewing.data.application)}
+        >
+          {!ready(viewing) ? <ApiStatus state={viewing} className="min-h-[30vh]" /> : <ApplicationDetails detail={viewing.data} />}
         </Modal>
       )}
     </div>
   );
 }
 
-function ApplicationDetails({ application: a }: { application: TeacherApplication }) {
-  const { db } = useApp();
-  const fee = db.registrationFees.find((f) => f.applicationId === a.id);
-  const teacher = a.teacherId ? db.teachers.find((t) => t.id === a.teacherId) : undefined;
+function ApplicationDetails({ detail }: { detail: AdminApplicationDetail }) {
+  const { application: a, registrationFee: fee, teacher } = detail;
   const rows: [string, string][] = [
     ["Full name", a.fullName],
-    ["Account email", getUser(db, a.userId)?.email ?? "—"],
+    ["Account email", detail.email],
     ["NID number", a.nid],
     ["bKash number", a.bkashNumber],
     ["TIN number", a.tin],

@@ -3,22 +3,19 @@
 import Link from "next/link";
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Camera, GraduationCap, Loader2, PlayCircle, Save, UserRound } from "lucide-react";
+import { Camera, GraduationCap, Loader2, PlayCircle, Save, Upload, UserRound } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { Avatar, Field, PageHeader } from "@/components/ui/primitives";
 import { useApp } from "@/context/AppStore";
 import { ApiError, errorMessage } from "@/lib/api";
 import type { EnrolledCourse } from "@/lib/api-types";
 import type { User } from "@/lib/types";
+import { uploadFile } from "@/lib/uploads";
 import { useApi } from "@/lib/use-api";
+import { useConfig } from "@/lib/use-config";
 import { btn, field, fieldError } from "@/lib/ui";
 
 type Errors = { name?: string; phone?: string; password?: string; currentPassword?: string; _?: string };
-
-const AVATARS = [
-  "Felix", "Aneka", "Zoe", "Jack", "Bella", "Shadow", "Ginger", "Midnight",
-  "Luna", "Max", "Charlie", "Oliver", "Lucy", "Coco", "Milo",
-].map((seed) => `https://api.dicebear.com/9.x/avataaars/svg?seed=${seed}`);
 
 export default function ProfilePage() {
   const { user } = useApp();
@@ -41,6 +38,9 @@ function ProfileForm({ user }: { user: User }) {
   const [saving, setSaving] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [tempAvatar, setTempAvatar] = useState(user.avatar ?? "");
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  // The presets come from the API, which only accepts a preset or the user's own upload
+  const presets = useConfig()?.avatarPresets ?? [];
 
   // Only students have purchased courses
   const owned = useApi<EnrolledCourse[]>(user.role === "student" ? "/me/enrollments" : null).data ?? [];
@@ -72,7 +72,21 @@ function ProfileForm({ user }: { user: User }) {
     }
   };
 
-  // Presets only for now: the API stores https links, and photo uploads arrive with the uploads endpoint
+  // Uploads the photo now; it becomes the avatar when saved
+  const pickPhoto = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingAvatar(true);
+    try {
+      setTempAvatar((await uploadFile(file, "avatar")).url);
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   const saveAvatar = async () => {
     try {
       await updateUser({ avatar: tempAvatar });
@@ -233,15 +247,20 @@ function ProfileForm({ user }: { user: User }) {
             <button onClick={() => setAvatarOpen(false)} className={btn.secondary}>
               Cancel
             </button>
-            <button onClick={saveAvatar} className={btn.primary}>
+            <button onClick={saveAvatar} disabled={uploadingAvatar} className={btn.primary}>
               Save avatar
             </button>
           </>
         }
       >
-        <p className="mb-4 text-xs text-muted-foreground">Uploading your own photo is coming soon.</p>
+        <label className={`${btn.secondary} mb-4 w-full cursor-pointer`}>
+          {uploadingAvatar ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+          {uploadingAvatar ? "Uploading..." : "Upload a photo (JPG, PNG or WebP, up to 5 MB)"}
+          <input type="file" accept="image/jpeg,image/png,image/webp" onChange={pickPhoto} disabled={uploadingAvatar} className="sr-only" />
+        </label>
+        <p className="mb-2 text-xs text-muted-foreground">Or pick one of these:</p>
         <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
-          {AVATARS.map((avatar, i) => (
+          {presets.map((avatar, i) => (
             <button
               key={avatar}
               onClick={() => setTempAvatar(avatar)}
@@ -253,10 +272,10 @@ function ProfileForm({ user }: { user: User }) {
             </button>
           ))}
         </div>
-        {tempAvatar && !AVATARS.includes(tempAvatar) && (
+        {tempAvatar && !presets.includes(tempAvatar) && (
           <div className="mt-4 flex items-center gap-3 text-sm">
             <img src={tempAvatar} alt="Uploaded avatar preview" className="h-14 w-14 rounded-full object-cover" />
-            Uploaded image selected
+            Your photo is selected
           </div>
         )}
       </Modal>

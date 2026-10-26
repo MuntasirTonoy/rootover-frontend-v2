@@ -1,6 +1,6 @@
-export const DAY_MS = 24 * 60 * 60 * 1000;
-
-export function formatBDT(amount: number): string {
+// undefined (a value still loading, e.g. from GET /config) shows "৳…"
+export function formatBDT(amount: number | undefined): string {
+  if (amount === undefined) return "৳…";
   const sign = amount < 0 ? "-" : "";
   return `${sign}৳${Math.round(Math.abs(amount)).toLocaleString("en-US")}`;
 }
@@ -43,9 +43,6 @@ export function uid(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-export function trxId(): string {
-  return `DEMO${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
-}
 
 export function initials(name: string): string {
   return name

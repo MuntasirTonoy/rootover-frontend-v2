@@ -16,14 +16,13 @@ import {
 } from "lucide-react";
 import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import FileInput from "@/components/ui/FileInput";
-import Modal from "@/components/ui/Modal";
 import { Field, SimulatedNotice, StatusBadge } from "@/components/ui/primitives";
 import { useApp, type ApplicationInput } from "@/context/AppStore";
 import { api, ApiError, errorMessage } from "@/lib/api";
-import type { MyApplication } from "@/lib/api-types";
+import type { MyApplication, PaymentStart } from "@/lib/api-types";
 import { formatBDT, formatDate, maskNumber } from "@/lib/format";
-import { REGISTRATION_FEE } from "@/lib/pricing";
-import type { ApplicationStatus, RegistrationFee, TeacherApplication, UploadedDoc } from "@/lib/types";
+import { useConfig } from "@/lib/use-config";
+import type { ApplicationStatus, RegistrationFee, TeacherApplication } from "@/lib/types";
 import { useApi } from "@/lib/use-api";
 import { btn, field, fieldError } from "@/lib/ui";
 
@@ -38,6 +37,7 @@ export default function TeacherApplyPage() {
   const { user, refreshUser } = useApp();
   // The latest application, its fee and (once approved) the teacher profile
   const mine = useApi<MyApplication>("/me/teacher-application");
+  const fee = useConfig()?.registrationFee;
   const [reapplying, setReapplying] = useState(false);
   const application = mine.data?.application ?? null;
   const approved = application?.status === "approved";
@@ -55,7 +55,7 @@ export default function TeacherApplyPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-extrabold tracking-tight">Become a teacher</h1>
         <p className="text-sm text-muted-foreground">
-          Apply, get reviewed, pay the one-time {formatBDT(REGISTRATION_FEE)} registration fee (simulated), and start selling courses.
+          Apply, get reviewed, pay the one-time {formatBDT(fee)} registration fee through bKash, and start selling courses.
         </p>
       </div>
 
@@ -74,7 +74,6 @@ export default function TeacherApplyPage() {
           application={application}
           fee={mine.data.registrationFee}
           teacherCode={mine.data.teacher?.teacherCode}
-          onPaid={(result) => mine.setData((d) => ({ ...d!, ...result }))}
           onReapply={() => setReapplying(true)}
         />
       ) : null}
@@ -114,37 +113,29 @@ function StatusPanel({
   application,
   fee,
   teacherCode,
-  onPaid,
   onReapply,
 }: {
   application: TeacherApplication;
   fee: RegistrationFee | null;
   teacherCode?: string;
-  onPaid: (result: { application: TeacherApplication; registrationFee: RegistrationFee }) => void;
   onReapply: () => void;
 }) {
-  const [payOpen, setPayOpen] = useState(false);
-  const [wallet, setWallet] = useState({ number: application.bkashNumber, pin: "" });
   const [error, setError] = useState("");
   const [paying, setPaying] = useState(false);
+  const feeAmount = useConfig()?.registrationFee;
 
-  const pay = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!/^01\d{9}$/.test(wallet.number)) return setError("Enter an 11-digit bKash number starting with 01.");
-    if (!/^\d{4,5}$/.test(wallet.pin)) return setError("Enter any 4–5 digit demo PIN.");
+  // Sends the applicant to bKash; the API records the fee once bKash confirms it
+  // and returns them to /payment/result, which links back here
+  const pay = async () => {
     setPaying(true);
+    setError("");
     try {
-      // SIMULATED: no gateway call. The demo PIN is never sent or stored.
-      const result = await api<{ application: TeacherApplication; registrationFee: RegistrationFee }>(
-        `/teacher-applications/${application.id}/pay-fee`,
-        { method: "POST", body: { payerNumber: wallet.number } },
-      );
-      setPayOpen(false);
-      onPaid(result);
-      toast.success("Registration fee paid (simulated). Your application is now under verification.");
+      const { redirectURL } = await api<PaymentStart>(`/teacher-applications/${application.id}/pay-fee`, {
+        method: "POST",
+      });
+      window.location.assign(redirectURL);
     } catch (err) {
       setError(errorMessage(err));
-    } finally {
       setPaying(false);
     }
   };
@@ -160,10 +151,19 @@ function StatusPanel({
       title: "Pay the registration fee",
       body: (
         <>
-          <p>Your application passed the first review. Pay the one-time {formatBDT(REGISTRATION_FEE)} registration fee to continue.</p>
-          <button onClick={() => setPayOpen(true)} className={`${btn.primary} mt-4`}>
-            Pay {formatBDT(REGISTRATION_FEE)} with bKash (simulated)
+          <p>Your application passed the first review. Pay the one-time {formatBDT(feeAmount)} registration fee to continue.</p>
+          <button onClick={pay} disabled={paying} className={`${btn.primary} mt-4`}>
+            {paying && <Loader2 size={16} className="animate-spin" />}
+            {paying ? "Opening bKash..." : `Pay ${formatBDT(feeAmount)} with bKash`}
           </button>
+          <div className="mt-3">
+            <SimulatedNotice>bKash sandbox: use a bKash test wallet. No real money is charged.</SimulatedNotice>
+          </div>
+          {error && (
+            <p className="mt-2 text-xs font-medium text-red-600" role="alert">
+              {error}
+            </p>
+          )}
         </>
       ),
     },
@@ -232,60 +232,12 @@ function StatusPanel({
           {panel.body}
         </div>
       </div>
-
-      <Modal open={payOpen} onClose={() => !paying && setPayOpen(false)} title="bKash payment (simulated)" size="md">
-        <form onSubmit={pay} className="space-y-4" noValidate>
-          <div className="rounded-md bg-pink-600 p-4 text-white">
-            <p className="text-xs opacity-80">Teacher registration fee</p>
-            <p className="font-bold">Root Over Education (demo)</p>
-            <p className="mt-2 text-2xl font-extrabold">{formatBDT(REGISTRATION_FEE)}</p>
-          </div>
-          <SimulatedNotice>This is a fake bKash screen. No real money is charged.</SimulatedNotice>
-          <Field label="bKash account number" htmlFor="fee-number">
-            <input
-              id="fee-number"
-              inputMode="numeric"
-              value={wallet.number}
-              onChange={(e) => setWallet((w) => ({ ...w, number: e.target.value.replace(/\D/g, "").slice(0, 11) }))}
-              className={field}
-            />
-          </Field>
-          <Field label="PIN" htmlFor="fee-pin">
-            <input
-              id="fee-pin"
-              type="password"
-              inputMode="numeric"
-              placeholder="••••"
-              value={wallet.pin}
-              onChange={(e) => setWallet((w) => ({ ...w, pin: e.target.value.replace(/\D/g, "").slice(0, 5) }))}
-              className={field}
-            />
-          </Field>
-          {error && (
-            <p className="text-xs font-medium text-red-600" role="alert">
-              {error}
-            </p>
-          )}
-          <button type="submit" disabled={paying} className={`${btn.primary} w-full`}>
-            {paying && <Loader2 size={16} className="animate-spin" />}
-            {paying ? "Confirming..." : "Confirm payment"}
-          </button>
-        </form>
-      </Modal>
     </div>
   );
 }
 
 type FormState = ApplicationInput;
 type Errors = Partial<Record<keyof FormState, string>>;
-
-function demoDoc(name: string, type: string) {
-  return { name, type, size: 150_000 };
-}
-
-// What the API stores until uploads exist: the file's name, type and size (the
-// local preview link never leaves the browser)
-const docMeta = (doc?: UploadedDoc) => doc && { name: doc.name, type: doc.type, size: doc.size };
 
 function ApplicationForm({ defaultName, onSubmitted }: { defaultName: string; onSubmitted: () => void }) {
   const [form, setForm] = useState<FormState>({
@@ -298,10 +250,12 @@ function ApplicationForm({ defaultName, onSubmitted }: { defaultName: string; on
   });
   const [errors, setErrors] = useState<Errors>({});
   const [submitting, setSubmitting] = useState(false);
+  const fee = useConfig()?.registrationFee;
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }));
 
-  // Obviously fictional values so nobody types real identity numbers into the demo
+  // Obviously fictional values so nobody types real identity numbers into the
+  // demo. Documents still have to be uploaded.
   const fillDemo = () =>
     setForm((f) => ({
       ...f,
@@ -310,10 +264,6 @@ function ApplicationForm({ defaultName, onSubmitted }: { defaultName: string; on
       tin: "000000999999",
       dateOfBirth: "1992-04-15",
       gender: "male",
-      photo: f.photo ?? demoDoc("demo-photo.jpg", "image/jpeg"),
-      sscCertificate: f.sscCertificate ?? demoDoc("demo-ssc-certificate.pdf", "application/pdf"),
-      hscCertificate: f.hscCertificate ?? demoDoc("demo-hsc-certificate.pdf", "application/pdf"),
-      fatherVoterId: f.fatherVoterId ?? demoDoc("demo-father-voter-id.jpg", "image/jpeg"),
     }));
 
   const validate = (): Errors => {
@@ -345,14 +295,8 @@ function ApplicationForm({ defaultName, onSubmitted }: { defaultName: string; on
     try {
       await api("/teacher-applications", {
         method: "POST",
-        body: {
-          ...form,
-          fullName: form.fullName.trim(),
-          photo: docMeta(form.photo),
-          sscCertificate: docMeta(form.sscCertificate),
-          hscCertificate: docMeta(form.hscCertificate),
-          fatherVoterId: docMeta(form.fatherVoterId),
-        },
+        // Documents are the uploads themselves; the API checks they're this user's
+        body: { ...form, fullName: form.fullName.trim() },
       });
       onSubmitted();
       toast.success("Application submitted! An admin will review it soon.");
@@ -429,15 +373,15 @@ function ApplicationForm({ defaultName, onSubmitted }: { defaultName: string; on
       </div>
 
       <div className="grid sm:grid-cols-2 gap-5">
-        <FileInput label="Profile photograph" accept="image/*" value={form.photo} onChange={(d) => set("photo", d)} error={errors.photo} hint="JPG or PNG" />
-        <FileInput label="Father's voter ID" accept="image/*,application/pdf" value={form.fatherVoterId} onChange={(d) => set("fatherVoterId", d)} error={errors.fatherVoterId} hint="Image or PDF" />
-        <FileInput label="SSC certificate" accept="application/pdf" value={form.sscCertificate} onChange={(d) => set("sscCertificate", d)} error={errors.sscCertificate} hint="PDF" />
-        <FileInput label="HSC certificate" accept="application/pdf" value={form.hscCertificate} onChange={(d) => set("hscCertificate", d)} error={errors.hscCertificate} hint="PDF" />
+        <FileInput label="Profile photograph" purpose="application-doc" accept="image/jpeg,image/png,image/webp" value={form.photo} onChange={(d) => set("photo", d)} error={errors.photo} hint="JPG, PNG or WebP · private, only admins see it" />
+        <FileInput label="Father's voter ID" purpose="application-doc" accept="image/jpeg,image/png,image/webp,application/pdf" value={form.fatherVoterId} onChange={(d) => set("fatherVoterId", d)} error={errors.fatherVoterId} hint="Image or PDF" />
+        <FileInput label="SSC certificate" purpose="application-doc" accept="application/pdf" value={form.sscCertificate} onChange={(d) => set("sscCertificate", d)} error={errors.sscCertificate} hint="PDF" />
+        <FileInput label="HSC certificate" purpose="application-doc" accept="application/pdf" value={form.hscCertificate} onChange={(d) => set("hscCertificate", d)} error={errors.hscCertificate} hint="PDF" />
       </div>
 
       <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 border-t border-border pt-4">
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <CheckCircle2 size={14} /> After review you&apos;ll pay a one-time {formatBDT(REGISTRATION_FEE)} fee (simulated).
+          <CheckCircle2 size={14} /> After review you&apos;ll pay a one-time {formatBDT(fee)} fee through bKash.
         </p>
         <button type="submit" disabled={submitting} className={btn.primary}>
           {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}

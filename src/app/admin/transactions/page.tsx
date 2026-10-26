@@ -1,49 +1,47 @@
 "use client";
 
 import { useState } from "react";
+import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import DataTable from "@/components/ui/DataTable";
 import Modal from "@/components/ui/Modal";
 import { FilterSelect, PageHeader, SearchInput, StatCard, StatusBadge } from "@/components/ui/primitives";
-import { useApp } from "@/context/AppStore";
+import { withQuery } from "@/lib/api";
+import type { AdminTransactions, PurchaseView } from "@/lib/api-types";
 import { formatBDT, formatDateTime } from "@/lib/format";
-import { getCourse, getUser, salesTotals, teacherInfo } from "@/lib/selectors";
-import type { Purchase } from "@/lib/types";
+import { useApi, useDebounced } from "@/lib/use-api";
 
 export default function TransactionsPage() {
-  const { db } = useApp();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
   const [method, setMethod] = useState("");
-  const [viewing, setViewing] = useState<Purchase | null>(null);
-
-  const q = query.trim().toLowerCase();
-  const rows = db.purchases
-    .filter((p) => {
-      const haystack = [p.trxId, getCourse(db, p.courseId)?.title ?? "", getUser(db, p.studentId)?.name ?? "", teacherInfo(db, p.teacherId)?.name ?? ""];
-      return (
-        (!status || p.status === status) &&
-        (!method || p.method === method) &&
-        (!q || haystack.some((s) => s.toLowerCase().includes(q)))
-      );
-    })
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const totals = salesTotals(rows);
+  const [page, setPage] = useState(1);
+  const [viewing, setViewing] = useState<PurchaseView | null>(null);
+  const q = useDebounced(query.trim());
+  // Newest first; q matches the transaction ID, course, student or teacher. Totals follow the filters.
+  const list = useApi<AdminTransactions>(withQuery("/admin/transactions", { status, method, q, page, limit: 10 }));
+  const filter = (set: (v: string) => void) => (v: string) => {
+    set(v);
+    setPage(1);
+  };
+  const totals = list.data?.totals;
 
   return (
     <div>
       <PageHeader title="Transactions" description="Course purchases and refunds (simulated). Totals follow the filters below." />
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Gross sales" value={formatBDT(totals.gross)} hint={`${totals.sales} completed`} />
-        <StatCard label="Commission (10%)" value={formatBDT(totals.commission)} />
-        <StatCard label="Teacher earnings" value={formatBDT(totals.teacherNet)} />
-        <StatCard label="Refunded" value={formatBDT(totals.refunds)} hint={`${totals.refundedCount} refunds, excluded above`} />
-      </div>
+      {totals && (
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+          <StatCard label="Gross sales" value={formatBDT(totals.gross)} hint={`${totals.sales} completed`} />
+          <StatCard label="Commission (10%)" value={formatBDT(totals.commission)} />
+          <StatCard label="Teacher earnings" value={formatBDT(totals.teacherNet)} />
+          <StatCard label="Refunded" value={formatBDT(totals.refunds)} hint={`${totals.refundedCount} refunds, excluded above`} />
+        </div>
+      )}
       <div className="mb-4 flex flex-col sm:flex-row gap-2">
-        <SearchInput value={query} onChange={setQuery} placeholder="Search by transaction, course, student or teacher" className="flex-1" />
+        <SearchInput value={query} onChange={filter(setQuery)} placeholder="Search by transaction, course, student or teacher" className="flex-1" />
         <FilterSelect
           label="Status"
           value={status}
-          onChange={setStatus}
+          onChange={filter(setStatus)}
           options={[
             { value: "", label: "All statuses" },
             { value: "completed", label: "Completed" },
@@ -53,36 +51,41 @@ export default function TransactionsPage() {
         <FilterSelect
           label="Method"
           value={method}
-          onChange={setMethod}
+          onChange={filter(setMethod)}
           options={[{ value: "", label: "All methods" }, ...["bKash", "Nagad", "Card"].map((m) => ({ value: m, label: m }))]}
         />
       </div>
-      <DataTable<Purchase>
-        rows={rows}
-        rowKey={(p) => p.id}
-        onRowClick={setViewing}
-        emptyTitle="No transactions match"
-        columns={[
-          { header: "Date", cell: (p) => <span className="whitespace-nowrap text-xs">{formatDateTime(p.createdAt)}</span> },
-          { header: "Transaction", cell: (p) => <span className="font-mono text-xs">{p.trxId}</span> },
-          {
-            header: "Course",
-            cell: (p) => (
-              <div className="min-w-[180px]">
-                <p className="font-semibold line-clamp-1">{getCourse(db, p.courseId)?.title}</p>
-                <p className="text-xs text-muted-foreground">
-                  {getUser(db, p.studentId)?.name} → {teacherInfo(db, p.teacherId)?.name}
-                </p>
-              </div>
-            ),
-          },
-          { header: "Paid", cell: (p) => <b>{formatBDT(p.amountPaid)}</b> },
-          { header: "Commission", cell: (p) => formatBDT(p.commission) },
-          { header: "Teacher net", cell: (p) => formatBDT(p.teacherNet) },
-          { header: "Method", cell: (p) => p.method },
-          { header: "Status", cell: (p) => <StatusBadge status={p.status} /> },
-        ]}
-      />
+      {!ready(list) ? (
+        <ApiStatus state={list} />
+      ) : (
+        <DataTable<PurchaseView>
+          rows={list.data.data}
+          rowKey={(p) => p.id}
+          onRowClick={setViewing}
+          emptyTitle="No transactions match"
+          serverPage={{ ...list.data.pagination, onPageChange: setPage, loading: list.loading }}
+          columns={[
+            { header: "Date", cell: (p) => <span className="whitespace-nowrap text-xs">{formatDateTime(p.createdAt)}</span> },
+            { header: "Transaction", cell: (p) => <span className="font-mono text-xs">{p.trxId}</span> },
+            {
+              header: "Course",
+              cell: (p) => (
+                <div className="min-w-[180px]">
+                  <p className="font-semibold line-clamp-1">{p.course.title}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {p.student.name} → {p.teacher.name}
+                  </p>
+                </div>
+              ),
+            },
+            { header: "Paid", cell: (p) => <b>{formatBDT(p.amountPaid)}</b> },
+            { header: "Commission", cell: (p) => formatBDT(p.commission) },
+            { header: "Teacher net", cell: (p) => formatBDT(p.teacherNet) },
+            { header: "Method", cell: (p) => p.method },
+            { header: "Status", cell: (p) => <StatusBadge status={p.status} /> },
+          ]}
+        />
+      )}
 
       {viewing && (
         <Modal open onClose={() => setViewing(null)} title={`Transaction ${viewing.trxId}`} size="md">
@@ -90,9 +93,9 @@ export default function TransactionsPage() {
             {(
               [
                 ["Date", formatDateTime(viewing.createdAt)],
-                ["Course", getCourse(db, viewing.courseId)?.title ?? "—"],
-                ["Student", `${getUser(db, viewing.studentId)?.name} (${getUser(db, viewing.studentId)?.email})`],
-                ["Teacher", teacherInfo(db, viewing.teacherId)?.name ?? "—"],
+                ["Course", viewing.course.title],
+                ["Student", `${viewing.student.name} (${viewing.student.email})`],
+                ["Teacher", viewing.teacher.name],
                 ["List price", formatBDT(viewing.listPrice)],
                 ["Course discount", `-${formatBDT(viewing.listPrice - viewing.coursePrice)}`],
                 ["Coupon", viewing.couponCode ? `${viewing.couponCode} (-${formatBDT(viewing.couponDiscount)})` : "None"],

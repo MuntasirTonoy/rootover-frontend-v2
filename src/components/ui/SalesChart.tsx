@@ -11,7 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import { formatBDT } from "@/lib/format";
-import type { MonthPoint } from "@/lib/selectors";
+import type { MonthPoint } from "@/lib/api-types";
 
 interface SalesChartProps {
   data: MonthPoint[];

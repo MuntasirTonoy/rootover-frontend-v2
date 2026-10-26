@@ -1,5 +1,5 @@
-// Data model for the frontend-only demo marketplace. Shapes are designed so a
-// real API can later return the same documents.
+// Shared shapes and enums of the Root Over API (backend BACKEND_SPEC section 11).
+// Composite response shapes live in api-types.ts.
 
 export type Role = "student" | "teacher" | "admin";
 
@@ -43,14 +43,14 @@ export type ApplicationStatus =
   | "approved"
   | "rejected";
 
-// An attached file: from the API it has a url (once uploads exist); the mock
-// keeps a local dataUrl preview when small enough for localStorage
+// An uploaded file (POST /uploads). `id` is sent back when an application
+// references it; private documents have a /uploads/private/:id url.
 export interface UploadedDoc {
+  id?: string;
   name: string;
   type: string;
   size: number;
   url?: string;
-  dataUrl?: string;
 }
 
 export interface TeacherApplication {
@@ -96,6 +96,8 @@ export interface Lesson {
   title: string;
   durationMin: number;
   videoUrl: string;
+  // https link to the lesson notes (PDF, Drive...), or null
+  noteLink?: string | null;
   isPreview: boolean;
 }
 
@@ -179,14 +181,6 @@ export interface Enrollment {
   lastWatchedAt?: string;
 }
 
-export interface SavedLesson {
-  id: string;
-  studentId: string;
-  courseId: string;
-  lessonId: string;
-  savedAt: string;
-}
-
 export type WithdrawalStatus = "pending" | "approved" | "rejected";
 
 export interface Withdrawal {
@@ -214,33 +208,6 @@ export type ReportReason = (typeof REPORT_REASONS)[number];
 // open → fix_submitted → resolved, or → fix_rejected → fix_submitted → ...
 export type ReportStatus = "open" | "fix_submitted" | "fix_rejected" | "resolved";
 
-export interface VideoReportEvent {
-  id: string;
-  type: "reported" | "fix_submitted" | "fix_approved" | "fix_rejected";
-  actorName: string;
-  actorRole: Role | "system";
-  note?: string;
-  at: string;
-}
-
-export interface VideoReport {
-  id: string;
-  lessonId: string;
-  courseId: string;
-  teacherId: string;
-  reporterId: string;
-  reason: ReportReason;
-  description?: string;
-  status: ReportStatus;
-  teacherNote?: string;
-  adminNote?: string;
-  fixSubmittedAt?: string;
-  resolvedAt?: string;
-  createdAt: string;
-  updatedAt: string;
-  events: VideoReportEvent[];
-}
-
 export interface ActivityLog {
   id: string;
   actorName: string;
@@ -248,22 +215,6 @@ export interface ActivityLog {
   action: string;
   target: string;
   at: string;
-}
-
-export interface DemoDB {
-  version: number;
-  users: User[];
-  teachers: TeacherProfile[];
-  applications: TeacherApplication[];
-  registrationFees: RegistrationFee[];
-  courses: Course[];
-  coupons: Coupon[];
-  purchases: Purchase[];
-  enrollments: Enrollment[];
-  savedLessons: SavedLesson[];
-  withdrawals: Withdrawal[];
-  videoReports: VideoReport[];
-  activityLogs: ActivityLog[];
 }
 
 // Site content used by the About page

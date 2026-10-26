@@ -3,24 +3,28 @@
 import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { CheckCircle2, Eye, Flag, Pencil, PlayCircle, Send, XCircle } from "lucide-react";
+import { CheckCircle2, Eye, Flag, Loader2, Pencil, PlayCircle, Send, XCircle } from "lucide-react";
+import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import DataTable from "@/components/ui/DataTable";
 import Modal from "@/components/ui/Modal";
 import { FilterSelect, PageHeader, SearchInput, StatCard, StatusBadge } from "@/components/ui/primitives";
-import { useApp } from "@/context/AppStore";
+import { api, ApiError, errorMessage } from "@/lib/api";
+import type { VideoReportBoard, VideoReportView } from "@/lib/api-types";
 import { formatDateTime } from "@/lib/format";
-import { eventLabels, reasonLabels, reportContext, reportCounts, reportStatusLabels } from "@/lib/reports";
-import { getEmbedUrl } from "@/lib/youtube";
-import type { VideoReport } from "@/lib/types";
+import { eventLabels, reasonLabels, reportStatusLabels } from "@/lib/reports";
+import type { ReportStatus } from "@/lib/types";
 import { btn, field } from "@/lib/ui";
+import { useApi, useDebounced } from "@/lib/use-api";
 
 type Mode = "teacher" | "admin";
 
 // What each side has to act on: teachers fix, admins review fixes
-const needsAction: Record<Mode, VideoReport["status"][]> = {
+const needsAction: Record<Mode, ReportStatus[]> = {
   teacher: ["fix_rejected", "open"],
   admin: ["fix_submitted"],
 };
+
+const listPath: Record<Mode, string> = { teacher: "/teacher/reports", admin: "/admin/video-reports" };
 
 const statusOptions = [
   { value: "action", label: "Needs my action" },
@@ -28,30 +32,25 @@ const statusOptions = [
   ...Object.entries(reportStatusLabels).map(([value, label]) => ({ value, label })),
 ];
 
-export default function VideoReportsBoard({ mode, reports }: { mode: Mode; reports: VideoReport[] }) {
-  const { db } = useApp();
+// The API sorts by what this role has to act on, then newest update; q matches
+// the course, the lesson or the student. Counts cover every report the role sees.
+export default function VideoReportsBoard({ mode }: { mode: Mode }) {
   const [status, setStatus] = useState("action");
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [viewingId, setViewingId] = useState<string | null>(null);
-
+  const q = useDebounced(query.trim());
+  // status is always sent: "" means every status, "action" the role's to-do list
+  const list = useApi<VideoReportBoard>(
+    `${listPath[mode]}?${new URLSearchParams({ status, page: String(page), limit: "10", ...(q ? { q } : {}) })}`,
+  );
+  const filter = (set: (v: string) => void) => (v: string) => {
+    set(v);
+    setPage(1);
+  };
   const priority = needsAction[mode];
-  const q = query.trim().toLowerCase();
-  const rows = reports
-    .filter((r) => (status === "action" ? priority.includes(r.status) : !status || r.status === status))
-    .filter((r) => {
-      if (!q) return true;
-      const { course, lesson, reporter } = reportContext(db, r);
-      return [course?.title, lesson?.title, reporter?.name, reasonLabels[r.reason].label].some((s) =>
-        s?.toLowerCase().includes(q),
-      );
-    })
-    .sort((a, b) => {
-      const pa = priority.indexOf(a.status);
-      const pb = priority.indexOf(b.status);
-      return (pa === -1 ? 99 : pa) - (pb === -1 ? 99 : pb) || b.updatedAt.localeCompare(a.updatedAt);
-    });
-  const counts = reportCounts(reports);
-  const viewing = reports.find((r) => r.id === viewingId);
+  const counts = list.data?.counts;
+  const viewing = list.data?.data.find((r) => r.id === viewingId);
 
   return (
     <div>
@@ -63,102 +62,133 @@ export default function VideoReportsBoard({ mode, reports }: { mode: Mode; repor
             : "Teachers submit fixes for reported videos. Approve the fix to close the report, or reject it to send it back."
         }
       />
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <StatCard label="Needs teacher fix" value={counts.needsFix} icon={Flag} hint="Open or fix rejected" />
-        <StatCard label="Awaiting admin approval" value={counts.awaitingApproval} hint="Fix submitted" />
-        <StatCard label="Resolved" value={counts.resolved} />
-      </div>
+      {counts && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <StatCard label="Needs teacher fix" value={counts.needsFix} icon={Flag} hint="Open or fix rejected" />
+          <StatCard label="Awaiting admin approval" value={counts.awaitingApproval} hint="Fix submitted" />
+          <StatCard label="Resolved" value={counts.resolved} />
+        </div>
+      )}
       <div className="mb-4 flex flex-col sm:flex-row gap-2">
-        <SearchInput value={query} onChange={setQuery} placeholder="Search by course, lesson, student or reason" className="flex-1" />
-        <FilterSelect label="Status" value={status} onChange={setStatus} options={statusOptions} />
+        <SearchInput value={query} onChange={filter(setQuery)} placeholder="Search by course, lesson or student" className="flex-1" />
+        <FilterSelect label="Status" value={status} onChange={filter(setStatus)} options={statusOptions} />
       </div>
 
-      <DataTable<VideoReport>
-        rows={rows}
-        rowKey={(r) => r.id}
-        onRowClick={(r) => setViewingId(r.id)}
-        emptyTitle={status === "action" ? "Nothing needs your action" : "No reports match"}
-        emptyDescription={status === "action" ? "Switch the filter to see every report." : undefined}
-        columns={[
-          {
-            header: "Lesson",
-            cell: (r) => {
-              const { course, lesson, chapterTitle } = reportContext(db, r);
-              return (
+      {!ready(list) ? (
+        <ApiStatus state={list} />
+      ) : (
+        <DataTable<VideoReportView>
+          rows={list.data.data}
+          rowKey={(r) => r.id}
+          onRowClick={(r) => setViewingId(r.id)}
+          emptyTitle={status === "action" ? "Nothing needs your action" : "No reports match"}
+          emptyDescription={status === "action" ? "Switch the filter to see every report." : undefined}
+          serverPage={{ ...list.data.pagination, onPageChange: setPage, loading: list.loading }}
+          columns={[
+            {
+              header: "Lesson",
+              cell: (r) => (
                 <div className="min-w-[200px]">
-                  <p className="font-semibold line-clamp-1">{lesson?.title ?? "Deleted lesson"}</p>
+                  <p className="font-semibold line-clamp-1">{r.lesson.title}</p>
                   <p className="text-xs text-muted-foreground line-clamp-1">
-                    {course?.title} · {chapterTitle}
+                    {r.course.title} · {r.chapter.title}
                   </p>
                 </div>
-              );
+              ),
             },
-          },
-          { header: "Reason", cell: (r) => <span className="whitespace-nowrap">{reasonLabels[r.reason].label}</span> },
-          ...(mode === "admin"
-            ? [{ header: "Teacher", cell: (r: VideoReport) => reportContext(db, r).teacher?.name ?? "—" }]
-            : []),
-          { header: "Reported by", cell: (r) => reportContext(db, r).reporter?.name ?? "—" },
-          {
-            header: "Status",
-            cell: (r) => <StatusBadge status={r.status} label={reportStatusLabels[r.status]} />,
-          },
-          { header: "Updated", cell: (r) => <span className="whitespace-nowrap text-xs">{formatDateTime(r.updatedAt)}</span> },
-          {
-            header: "",
-            className: "text-right",
-            cell: (r) => (
-              <button className={btn.small} onClick={() => setViewingId(r.id)}>
-                <Eye size={14} /> {priority.includes(r.status) ? (mode === "teacher" ? "Fix" : "Review") : "View"}
-              </button>
-            ),
-          },
-        ]}
-      />
+            { header: "Reason", cell: (r) => <span className="whitespace-nowrap">{reasonLabels[r.reason].label}</span> },
+            ...(mode === "admin" ? [{ header: "Teacher", cell: (r: VideoReportView) => r.teacher.name }] : []),
+            { header: "Reported by", cell: (r) => r.reporter.name },
+            {
+              header: "Status",
+              cell: (r) => <StatusBadge status={r.status} label={reportStatusLabels[r.status]} />,
+            },
+            { header: "Updated", cell: (r) => <span className="whitespace-nowrap text-xs">{formatDateTime(r.updatedAt)}</span> },
+            {
+              header: "",
+              className: "text-right",
+              cell: (r) => (
+                <button className={btn.small} onClick={() => setViewingId(r.id)}>
+                  <Eye size={14} /> {priority.includes(r.status) ? (mode === "teacher" ? "Fix" : "Review") : "View"}
+                </button>
+              ),
+            },
+          ]}
+        />
+      )}
 
       {viewing && (
-        <ReportDetail key={viewing.id} report={viewing} mode={mode} onClose={() => setViewingId(null)} />
+        <ReportDetail
+          key={viewing.id}
+          report={viewing}
+          mode={mode}
+          onClose={() => setViewingId(null)}
+          onChanged={() => {
+            setViewingId(null);
+            list.reload();
+          }}
+        />
       )}
     </div>
   );
 }
 
-function ReportDetail({ report, mode, onClose }: { report: VideoReport; mode: Mode; onClose: () => void }) {
-  const { db, submitReportFix, reviewReportFix } = useApp();
-  const { course, lesson, chapterTitle, teacher, reporter } = reportContext(db, report);
+function ReportDetail({
+  report,
+  mode,
+  onClose,
+  onChanged,
+}: {
+  report: VideoReportView;
+  mode: Mode;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const canFix = mode === "teacher" && (report.status === "open" || report.status === "fix_rejected");
   const canReview = mode === "admin" && report.status === "fix_submitted";
 
-  const run = (fn: () => void, success: string) => {
+  const run = async (path: string, body: Record<string, string | undefined>, success: string) => {
+    setBusy(true);
     try {
-      fn();
+      await api(path, { method: "POST", body });
       toast.success(success);
-      onClose();
+      onChanged();
     } catch (err) {
-      setError((err as Error).message);
+      // Validation errors arrive per field (note / reason)
+      setError(err instanceof ApiError ? (Object.values(err.fields ?? {})[0] ?? err.message) : errorMessage(err));
+      setBusy(false);
     }
   };
 
+  const text = note.trim();
   const footer = canFix ? (
     <button
-      onClick={() => run(() => submitReportFix(report.id, note), "Fix submitted for admin approval")}
+      disabled={busy}
+      onClick={() => run(`/teacher/reports/${report.id}/submit-fix`, { note: text }, "Fix submitted for admin approval")}
       className={btn.primary}
     >
-      <Send size={16} /> Submit fix for approval
+      {busy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Submit fix for approval
     </button>
   ) : canReview ? (
     <>
       <button
-        onClick={() => run(() => reviewReportFix(report.id, "reject", note), "Fix rejected and sent back to the teacher")}
+        disabled={busy}
+        onClick={() =>
+          run(`/admin/video-reports/${report.id}/reject-fix`, { reason: text }, "Fix rejected and sent back to the teacher")
+        }
         className={`${btn.secondary} text-red-600`}
       >
         <XCircle size={16} /> Reject fix
       </button>
       <button
-        onClick={() => run(() => reviewReportFix(report.id, "approve", note), "Fix approved. Report resolved.")}
+        disabled={busy}
+        onClick={() =>
+          run(`/admin/video-reports/${report.id}/approve-fix`, { note: text || undefined }, "Fix approved. Report resolved.")
+        }
         className={btn.primary}
       >
         <CheckCircle2 size={16} /> Approve fix
@@ -167,27 +197,25 @@ function ReportDetail({ report, mode, onClose }: { report: VideoReport; mode: Mo
   ) : undefined;
 
   return (
-    <Modal open onClose={onClose} title={`Report: ${lesson?.title ?? "Deleted lesson"}`} size="xl" footer={footer}>
+    <Modal open onClose={onClose} title={`Report: ${report.lesson.title}`} size="xl" footer={footer}>
       <div className="grid lg:grid-cols-5 gap-6">
         <div className="lg:col-span-3 space-y-4">
-          {lesson && (
-            <div className="aspect-video w-full overflow-hidden rounded-md bg-black">
-              <iframe src={getEmbedUrl(lesson.videoUrl)} title={lesson.title} className="h-full w-full" allowFullScreen />
-            </div>
-          )}
+          <div className="aspect-video w-full overflow-hidden rounded-md bg-black">
+            <iframe src={report.lesson.videoUrl} title={report.lesson.title} className="h-full w-full" allowFullScreen />
+          </div>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             <dt className="text-muted-foreground">Course</dt>
-            <dd className="font-medium">{course?.title}</dd>
+            <dd className="font-medium">{report.course.title}</dd>
             <dt className="text-muted-foreground">Chapter</dt>
-            <dd className="font-medium">{chapterTitle}</dd>
+            <dd className="font-medium">{report.chapter.title}</dd>
             <dt className="text-muted-foreground">Reason</dt>
             <dd className="font-medium">{reasonLabels[report.reason].label}</dd>
             <dt className="text-muted-foreground">Reported by</dt>
-            <dd className="font-medium">{reporter?.name}</dd>
+            <dd className="font-medium">{report.reporter.name}</dd>
             {mode === "admin" && (
               <>
                 <dt className="text-muted-foreground">Teacher</dt>
-                <dd className="font-medium">{teacher?.name}</dd>
+                <dd className="font-medium">{report.teacher.name}</dd>
               </>
             )}
             <dt className="text-muted-foreground">Status</dt>
@@ -201,13 +229,11 @@ function ReportDetail({ report, mode, onClose }: { report: VideoReport; mode: Mo
             </p>
           )}
           <div className="flex flex-wrap gap-2">
-            {lesson && (
-              <Link href={`/learn/${report.courseId}?lesson=${report.lessonId}`} target="_blank" className={btn.small}>
-                <PlayCircle size={14} /> Open in player
-              </Link>
-            )}
+            <Link href={`/learn/${report.course.id}?lesson=${report.lesson.id}`} target="_blank" className={btn.small}>
+              <PlayCircle size={14} /> Open in player
+            </Link>
             {mode === "teacher" && (
-              <Link href={`/teacher/courses/${report.courseId}/edit`} className={btn.small}>
+              <Link href={`/teacher/courses/${report.course.id}/edit`} className={btn.small}>
                 <Pencil size={14} /> Edit lesson in course editor
               </Link>
             )}

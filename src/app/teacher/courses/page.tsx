@@ -13,7 +13,6 @@ import { api, ApiError, errorMessage, withQuery } from "@/lib/api";
 import type { TeacherCourseRow } from "@/lib/api-types";
 import { confirmAction } from "@/lib/confirm";
 import { formatBDT, formatDate } from "@/lib/format";
-import { coursePrice } from "@/lib/pricing";
 import { btn } from "@/lib/ui";
 import { useApi, useDebounced } from "@/lib/use-api";
 import { submitCourse } from "@/lib/use-teacher";
@@ -108,7 +107,7 @@ export default function TeacherCoursesPage() {
                 </div>
               ),
             },
-            { header: "Price", cell: (c) => formatBDT(coursePrice(c)) },
+            { header: "Price", cell: (c) => formatBDT(c.effectivePrice) },
             { header: "Students", cell: (c) => c.students },
             { header: "Net earned", cell: (c) => formatBDT(c.net) },
             { header: "Rating", cell: (c) => <Stars rating={c.rating.average} count={c.rating.count} /> },

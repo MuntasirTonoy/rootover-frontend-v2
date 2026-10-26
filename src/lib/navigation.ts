@@ -17,6 +17,7 @@ import {
   Wallet,
 } from "lucide-react";
 import type { NavItem } from "@/components/DashboardShell";
+import type { Role } from "./types";
 
 // Student dashboard sidebar (desktop). Profile lives in the avatar dropdown.
 export const studentNav: NavItem[] = [
@@ -53,3 +54,7 @@ export const adminNav: NavItem[] = [
   { label: "Reports", href: "/admin/reports", icon: BarChart3 },
   { label: "Activity Log", href: "/admin/activity-logs", icon: Activity },
 ];
+
+// Where each role lands after signing in
+export const dashboardPath = (role: Role) =>
+  role === "admin" ? "/admin/dashboard" : role === "teacher" ? "/teacher/dashboard" : "/dashboard";

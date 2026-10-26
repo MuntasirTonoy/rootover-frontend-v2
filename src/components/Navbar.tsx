@@ -19,7 +19,7 @@ import ThemeToggle from "./ThemeToggle";
 import { Avatar } from "./ui/primitives";
 import { useApp } from "@/context/AppStore";
 import { adminNav, studentMobileNav, teacherNav } from "@/lib/navigation";
-import { dashboardPath } from "@/lib/selectors";
+import { dashboardPath } from "@/lib/navigation";
 import { banner } from "@/lib/site-config";
 import type { User } from "@/lib/types";
 

@@ -1,6 +1,6 @@
 // Labels and helpers for the video report system
-import { findLesson, getCourse, getUser, teacherInfo } from "./selectors";
-import type { DemoDB, ReportReason, ReportStatus, VideoReport } from "./types";
+import type { VideoReportView } from "./api-types";
+import type { ReportReason, ReportStatus } from "./types";
 
 export const reasonLabels: Record<ReportReason, { label: string; hint: string }> = {
   VIDEO_ISSUE: { label: "Video issue", hint: "Not playing, frozen or poor quality" },
@@ -18,32 +18,9 @@ export const reportStatusLabels: Record<ReportStatus, string> = {
   resolved: "Resolved",
 };
 
-export const eventLabels: Record<VideoReport["events"][number]["type"], string> = {
+export const eventLabels: Record<VideoReportView["events"][number]["type"], string> = {
   reported: "Reported",
   fix_submitted: "Fix submitted",
   fix_approved: "Fix approved",
   fix_rejected: "Fix rejected",
 };
-
-// A report still needs work until an admin approves the fix
-export const isActiveReport = (r: VideoReport) => r.status !== "resolved";
-
-export function reportContext(db: DemoDB, report: VideoReport) {
-  const course = getCourse(db, report.courseId);
-  const found = course ? findLesson(course, report.lessonId) : undefined;
-  return {
-    course,
-    lesson: found?.lesson,
-    chapterTitle: found?.chapterTitle,
-    teacher: teacherInfo(db, report.teacherId),
-    reporter: getUser(db, report.reporterId),
-  };
-}
-
-export function reportCounts(reports: VideoReport[]) {
-  return {
-    needsFix: reports.filter((r) => r.status === "open" || r.status === "fix_rejected").length,
-    awaitingApproval: reports.filter((r) => r.status === "fix_submitted").length,
-    resolved: reports.filter((r) => r.status === "resolved").length,
-  };
-}

@@ -8,7 +8,7 @@ import DataTable from "@/components/ui/DataTable";
 import SalesChart from "@/components/ui/SalesChart";
 import { Avatar, PageHeader, Section, StatCard, Stars, StatusBadge, courseStatusLabel } from "@/components/ui/primitives";
 import { formatBDT, formatDate } from "@/lib/format";
-import { CLEARING_DAYS } from "@/lib/pricing";
+import { useConfig } from "@/lib/use-config";
 import type { TeacherDashboard as Dashboard } from "@/lib/api-types";
 import { useApi } from "@/lib/use-api";
 import { btn } from "@/lib/ui";
@@ -17,6 +17,7 @@ import { useTeacher } from "@/lib/use-teacher";
 export default function TeacherDashboard() {
   const { teacher, application } = useTeacher();
   const dashboard = useApi<Dashboard>("/teacher/dashboard");
+  const config = useConfig();
   if (!ready(dashboard)) return <ApiStatus state={dashboard} />;
   // Every figure is computed by the API (money, counts, the 6-month chart)
   const { counts, students, finance, monthly, coursePerformance, recentEnrollments: recent, reports } = dashboard.data;
@@ -99,7 +100,7 @@ export default function TeacherDashboard() {
               <p className="mt-0.5 font-bold text-sm">{formatBDT(finance.withdrawable)}</p>
             </div>
           </div>
-          <p className="mt-2 text-[11px] text-muted-foreground">Sales clear after {CLEARING_DAYS} days.</p>
+          <p className="mt-2 text-[11px] text-muted-foreground">Sales clear after {config?.clearingDays ?? "a few"} days.</p>
           <Link href="/teacher/withdrawals" className={`${btn.primary} mt-3 w-full`}>
             Request withdrawal
           </Link>

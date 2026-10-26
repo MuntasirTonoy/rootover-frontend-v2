@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Circle,
+  FileText,
   ListVideo,
   Lock,
   PanelRightClose,
@@ -28,7 +29,6 @@ import { api, errorMessage } from "@/lib/api";
 import type { ChapterPublic, LessonPublic, PlayerData, Progress } from "@/lib/api-types";
 import { formatBDT, formatDuration } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
-import { getEmbedUrl } from "@/lib/youtube";
 import { btn } from "@/lib/ui";
 
 // Lessons in curriculum order with their chapter, for prev/next navigation
@@ -70,6 +70,8 @@ function Player({ params }: LearnPageProps) {
     saved?: Set<string>;
     completed?: Set<string>;
     progress?: Progress;
+    // Lessons this student has an unresolved report on
+    reported?: Set<string>;
   }>({});
 
   // Visibility and locking come from the API: locked lessons have no video link
@@ -125,6 +127,7 @@ function Player({ params }: LearnPageProps) {
   const progress = localNow.progress ?? enrollment?.progress ?? { completed: 0, total: lessons.length, percent: 0 };
   const completedIds = localNow.completed ?? new Set(enrollment?.completedLessonIds ?? []);
   const savedIds = localNow.saved ?? new Set(player.data!.savedLessonIds);
+  const reportedIds = localNow.reported ?? new Set(player.data!.myOpenReportLessonIds);
   const prev = current ? lessons[current.index - 1] : undefined;
   const next = current ? lessons[current.index + 1] : undefined;
   const isDone = !!lesson && completedIds.has(lesson.id);
@@ -247,7 +250,7 @@ function Player({ params }: LearnPageProps) {
               {lesson && watchable ? (
                 <iframe
                   key={lesson.id}
-                  src={getEmbedUrl(lesson.videoUrl ?? undefined)}
+                  src={lesson.videoUrl ?? undefined}
                   title={lesson.title}
                   className="h-full w-full"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -283,6 +286,17 @@ function Player({ params }: LearnPageProps) {
                       {isDone && <span className="ml-2 font-semibold text-green-600">· Completed</span>}
                       {!access.full && lesson.isPreview && <span className="ml-2 font-semibold text-primary">· Free preview</span>}
                     </p>
+                    {/* The API only sends the link to people who can watch this lesson */}
+                    {lesson.noteLink && (
+                      <a
+                        href={lesson.noteLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`${btn.small} mt-2 inline-flex`}
+                      >
+                        <FileText size={14} /> Download notes
+                      </a>
+                    )}
                   </div>
                   {/* Saving and progress tracking are learner features */}
                   {watchable && (!user || user.role === "student") && (
@@ -293,6 +307,8 @@ function Player({ params }: LearnPageProps) {
                           courseId={course.id}
                           lessonId={lesson.id}
                           lessonTitle={lesson.title}
+                          reported={reportedIds.has(lesson.id)}
+                          onReported={() => change({ reported: new Set(reportedIds).add(lesson.id) })}
                           className="w-full max-sm:px-2!"
                         />
                       )}

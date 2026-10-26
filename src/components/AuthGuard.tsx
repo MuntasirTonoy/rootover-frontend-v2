@@ -6,7 +6,7 @@ import { AlertCircle } from "lucide-react";
 import Link from "next/link";
 import LoadingAnimation from "./LoadingAnimation";
 import { useApp } from "@/context/AppStore";
-import { dashboardPath } from "@/lib/selectors";
+import { dashboardPath } from "@/lib/navigation";
 import type { Role } from "@/lib/types";
 
 interface AuthGuardProps {

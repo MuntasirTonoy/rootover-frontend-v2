@@ -6,7 +6,7 @@ import DataTable from "@/components/ui/DataTable";
 import SalesChart from "@/components/ui/SalesChart";
 import { FilterSelect, PageHeader, Section, StatCard, StatusBadge } from "@/components/ui/primitives";
 import { formatBDT, formatDateTime } from "@/lib/format";
-import { CLEARING_DAYS, COMMISSION_RATE } from "@/lib/pricing";
+import { useConfig } from "@/lib/use-config";
 import { withQuery } from "@/lib/api";
 import type { PurchaseView, TeacherCourseRow, TeacherEarnings } from "@/lib/api-types";
 import { useApi } from "@/lib/use-api";
@@ -15,6 +15,7 @@ export default function EarningsPage() {
   const [courseId, setCourseId] = useState("");
   const [page, setPage] = useState(1);
   const courses = useApi<TeacherCourseRow[]>("/teacher/courses").data ?? [];
+  const config = useConfig();
   // Finance and the chart cover every sale; courseId and page only change the transactions
   const earnings = useApi<TeacherEarnings>(withQuery("/teacher/earnings", { courseId, page, limit: 10 }));
   if (!ready(earnings)) return <ApiStatus state={earnings} />;
@@ -28,7 +29,7 @@ export default function EarningsPage() {
         <StatCard label="List value of sales" value={formatBDT(finance.listTotal)} hint={`${finance.sales} sales before discounts`} />
         <StatCard label="Discounts given" value={formatBDT(finance.discounts)} hint="Course discounts + coupons" />
         <StatCard label="Gross sales" value={formatBDT(finance.gross)} hint="Amount students paid" />
-        <StatCard label={`Platform fee (${COMMISSION_RATE * 100}%)`} value={formatBDT(finance.commission)} />
+        <StatCard label={config ? `Platform fee (${config.commissionRate * 100}%)` : "Platform fee"} value={formatBDT(finance.commission)} />
       </div>
 
       <Section title="Where your net earnings are">
@@ -37,7 +38,7 @@ export default function EarningsPage() {
         </p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
-            { label: "Pending clearance", value: finance.pendingClearance, hint: `Sales from the last ${CLEARING_DAYS} days` },
+            { label: "Pending clearance", value: finance.pendingClearance, hint: `Sales from the last ${config?.clearingDays ?? "few"} days` },
             { label: "Pending withdrawals", value: finance.pendingWithdrawals, hint: "Requested, awaiting admin" },
             { label: "Withdrawn", value: finance.withdrawn, hint: "Paid out to bKash" },
             { label: "Withdrawable", value: finance.withdrawable, hint: "Available to request now" },

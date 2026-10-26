@@ -3,27 +3,19 @@
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { CheckCircle2, CreditCard, Loader2, Lock, Smartphone, Tag, X } from "lucide-react";
+import { CheckCircle2, Loader2, Lock, Smartphone, Tag, X } from "lucide-react";
 import AuthGuard from "@/components/AuthGuard";
 import CourseThumb from "@/components/course/CourseThumb";
 import LoadingAnimation from "@/components/LoadingAnimation";
-import Modal from "@/components/ui/Modal";
 import ApiStatus, { ready } from "@/components/ui/ApiStatus";
-import { EmptyBlock, Field, SimulatedNotice } from "@/components/ui/primitives";
+import { EmptyBlock, SimulatedNotice } from "@/components/ui/primitives";
 import { api, ApiError, errorMessage } from "@/lib/api";
-import type { CouponPublic, CourseDetail, Quote } from "@/lib/api-types";
-import { formatBDT, maskNumber } from "@/lib/format";
-import type { Enrollment, PaymentMethod, Purchase } from "@/lib/types";
+import type { CouponPublic, CourseDetail, PaymentStart, Quote } from "@/lib/api-types";
+import { formatBDT } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
 import { btn, field, fieldError } from "@/lib/ui";
 
 type QuoteResult = { quote: Quote; coupon: CouponPublic | null };
-
-const methods: { id: PaymentMethod; label: string; caption: string; icon: typeof Smartphone }[] = [
-  { id: "bKash", label: "bKash", caption: "Mobile wallet (simulated)", icon: Smartphone },
-  { id: "Nagad", label: "Nagad", caption: "Mobile wallet (simulated)", icon: Smartphone },
-  { id: "Card", label: "Card", caption: "Visa / Mastercard (simulated)", icon: CreditCard },
-];
 
 export default function CheckoutPage() {
   return (
@@ -52,12 +44,7 @@ function Checkout() {
   const [priced, setPriced] = useState<QuoteResult | null>(null);
   const [applying, setApplying] = useState(false);
   const [couponError, setCouponError] = useState("");
-  const [method, setMethod] = useState<PaymentMethod>("bKash");
-  const [walletOpen, setWalletOpen] = useState(false);
-  const [wallet, setWallet] = useState({ number: "", pin: "" });
-  const [walletError, setWalletError] = useState("");
   const [processing, setProcessing] = useState(false);
-  const [done, setDone] = useState<Purchase | null>(null);
 
   const course = detail.data;
   const buyable = !!course?.published && !course.access.enrolled;
@@ -98,21 +85,13 @@ function Checkout() {
     total: course.effectivePrice,
   };
 
-  if (done || owned) {
+  if (owned) {
     const first = course.enrollment?.resumeLessonId ?? course.chapters[0]?.lessons[0]?.id;
     return (
       <div className="container-custom py-16 max-w-xl text-center">
         <CheckCircle2 size={56} className="mx-auto text-green-600 mb-4" />
-        <h1 className="text-2xl font-extrabold mb-2">{done ? "Payment successful!" : "You already own this course"}</h1>
-        <p className="text-muted-foreground mb-2">
-          {course.title} has been added to My Classes.
-        </p>
-        {done && (
-          <p className="text-sm text-muted-foreground mb-6">
-            Paid {formatBDT(done.amountPaid)} via {done.method} (simulated) · Transaction{" "}
-            <span className="font-mono">{done.trxId}</span>
-          </p>
-        )}
+        <h1 className="text-2xl font-extrabold mb-2">You already own this course</h1>
+        <p className="text-muted-foreground mb-2">{course.title} is in My Classes.</p>
         <div className="flex flex-wrap justify-center gap-3 mt-4">
           <Link href={`/learn/${course.id}${first ? `?lesson=${first}` : ""}`} className={btn.primary}>
             Start learning
@@ -151,36 +130,23 @@ function Checkout() {
     }
   };
 
-  // SIMULATED payment: the API records the purchase and enrolls the student at once
-  const complete = async () => {
+  // Starts a bKash payment and sends the browser to bKash. bKash returns the
+  // payer to the API, which confirms the payment, enrolls the student and
+  // redirects to /payment/result.
+  const pay = async () => {
     setProcessing(true);
     try {
-      const result = await api<{ purchase: Purchase; enrollment: Enrollment }>("/checkout", {
+      const { redirectURL } = await api<PaymentStart>("/checkout", {
         method: "POST",
-        body: { courseId, couponCode: coupon?.code, method },
+        body: { courseId, couponCode: coupon?.code },
       });
-      setDone(result.purchase);
+      window.location.assign(redirectURL);
     } catch (err) {
+      setProcessing(false);
       // Bought in another tab meanwhile: show the "already own" screen
       if (err instanceof ApiError && err.status === 409) detail.reload();
       else setCouponError(errorMessage(err));
-    } finally {
-      setProcessing(false);
-      setWalletOpen(false);
     }
-  };
-
-  const handlePay = () => {
-    if (method === "Card") complete();
-    else setWalletOpen(true);
-  };
-
-  const confirmWallet = (e: FormEvent) => {
-    e.preventDefault();
-    if (!/^01\d{9}$/.test(wallet.number)) return setWalletError("Enter an 11-digit number starting with 01.");
-    if (!/^\d{4,5}$/.test(wallet.pin)) return setWalletError("Enter any 4–5 digit demo PIN.");
-    setWalletError("");
-    complete();
   };
 
   return (
@@ -254,26 +220,17 @@ function Checkout() {
             <h2 className="font-bold mb-3 flex items-center gap-2">
               <Lock size={18} className="text-primary" /> Payment method
             </h2>
-            <div className="grid sm:grid-cols-3 gap-3" role="radiogroup" aria-label="Payment method">
-              {methods.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={method === m.id}
-                  onClick={() => setMethod(m.id)}
-                  className={`rounded-md border-2 p-3 text-left transition-colors ${
-                    method === m.id ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
-                  }`}
-                >
-                  <m.icon size={18} className={m.id === "bKash" ? "text-pink-600" : "text-primary"} />
-                  <p className="mt-1 font-bold text-foreground">{m.label}</p>
-                  <p className="text-[11px] text-muted-foreground">{m.caption}</p>
-                </button>
-              ))}
+            <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-primary/5 p-3">
+              <Smartphone size={20} className="text-pink-600" />
+              <div>
+                <p className="font-bold text-foreground">bKash</p>
+                <p className="text-[11px] text-muted-foreground">You&apos;ll approve the payment on bKash&apos;s own page.</p>
+              </div>
             </div>
             <div className="mt-4">
-              <SimulatedNotice />
+              <SimulatedNotice>
+                bKash sandbox: use a bKash test wallet. No real money is charged.
+              </SimulatedNotice>
             </div>
           </section>
         </div>
@@ -303,55 +260,15 @@ function Checkout() {
                 <dd className="text-primary">{formatBDT(q.total)}</dd>
               </div>
             </dl>
-            <button onClick={handlePay} disabled={processing || !priced} className={`${btn.primary} w-full py-3 mt-5`}>
+            <button onClick={pay} disabled={processing || !priced} className={`${btn.primary} w-full py-3 mt-5`}>
               {processing ? <Loader2 size={18} className="animate-spin" /> : <Lock size={16} />}
-              {processing ? "Processing..." : `Pay ${formatBDT(q.total)}`}
+              {processing ? "Opening bKash..." : `Pay ${formatBDT(q.total)} with bKash`}
             </button>
-            <p className="mt-3 text-center text-[11px] text-muted-foreground">Simulated checkout · no real charge</p>
+            <p className="mt-3 text-center text-[11px] text-muted-foreground">bKash sandbox · test payments only</p>
           </div>
         </aside>
       </div>
 
-      <Modal open={walletOpen} onClose={() => !processing && setWalletOpen(false)} title={`${method} payment (simulated)`} size="md">
-        <form onSubmit={confirmWallet} className="space-y-4" noValidate>
-          <div className="rounded-md bg-pink-600 p-4 text-white">
-            <p className="text-xs opacity-80">Merchant</p>
-            <p className="font-bold">Root Over Education (demo)</p>
-            <p className="mt-2 text-2xl font-extrabold">{formatBDT(q.total)}</p>
-          </div>
-          <SimulatedNotice>This is a fake {method} screen. Enter any demo number and PIN.</SimulatedNotice>
-          <Field label={`${method} account number`} htmlFor="wallet-number">
-            <input
-              id="wallet-number"
-              inputMode="numeric"
-              placeholder="01XXXXXXXXX"
-              value={wallet.number}
-              onChange={(e) => setWallet((w) => ({ ...w, number: e.target.value.replace(/\D/g, "").slice(0, 11) }))}
-              className={field}
-            />
-          </Field>
-          <Field label="PIN" htmlFor="wallet-pin">
-            <input
-              id="wallet-pin"
-              type="password"
-              inputMode="numeric"
-              placeholder="••••"
-              value={wallet.pin}
-              onChange={(e) => setWallet((w) => ({ ...w, pin: e.target.value.replace(/\D/g, "").slice(0, 5) }))}
-              className={field}
-            />
-          </Field>
-          {walletError && (
-            <p className="text-xs font-medium text-red-600" role="alert">
-              {walletError}
-            </p>
-          )}
-          <button type="submit" disabled={processing} className={`${btn.primary} w-full`}>
-            {processing ? <Loader2 size={16} className="animate-spin" /> : null}
-            {processing ? "Confirming..." : `Confirm payment${wallet.number.length === 11 ? ` from ${maskNumber(wallet.number)}` : ""}`}
-          </button>
-        </form>
-      </Modal>
     </div>
   );
 }

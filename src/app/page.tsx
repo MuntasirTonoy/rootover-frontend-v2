@@ -47,15 +47,22 @@ function SectionHeading({
   title,
   subtitle,
   action,
+  center = false,
 }: {
   eyebrow?: string;
   title: string;
   subtitle?: string;
   action?: ReactNode;
+  // Centred text; any action goes underneath instead of on the right
+  center?: boolean;
 }) {
   return (
-    <div className="mb-8 md:mb-10 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div className="max-w-2xl">
+    <div
+      className={`mb-8 md:mb-10 flex flex-col gap-3 ${
+        center ? "items-center text-center" : "sm:flex-row sm:items-end sm:justify-between"
+      }`}
+    >
+      <div className={`max-w-2xl ${center ? "mx-auto" : ""}`}>
         {eyebrow && <p className="mb-2 text-xs font-bold uppercase tracking-widest text-primary">{eyebrow}</p>}
         <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-foreground">{title}</h2>
         {subtitle && <p className="mt-2 text-sm sm:text-base text-muted-foreground">{subtitle}</p>}
@@ -78,13 +85,10 @@ export default function Home() {
   const router = useRouter();
   const [query, setQuery] = useState("");
 
-  // Featured first, then best rated (the API sorts by rating; the catalog is small)
-  const catalog = useApi<Paginated<CourseSummary>>("/courses?sort=rating&limit=100");
-  const featured = [...(catalog.data?.data ?? [])]
-    .sort((a, b) => Number(b.featured) - Number(a.featured))
-    .slice(0, 8);
+  // The 8 courses with the most students (ranked by the API from the database)
+  const featured = useApi<Paginated<CourseSummary>>("/courses?sort=popular&limit=8").data?.data ?? [];
   const levelCounts = useApi<Facets>("/courses/facets").data?.levels;
-  // Already ranked by how many students their published courses have
+  // Ranked by the API: most students, then best rating
   const teachers = (useApi<TeacherPublic[]>("/teachers").data ?? []).slice(0, 4);
 
   const handleSearch = (e: FormEvent) => {
@@ -94,9 +98,9 @@ export default function Home() {
 
   return (
     <div className="flex flex-col">
-      {/* Hero */}
-      <section className="bg-background pt-10 pb-14 md:pt-16 md:pb-20 overflow-hidden">
-        <div className="container-custom">
+      {/* Hero: fills the screen below the 80px sticky navbar */}
+      <section className="bg-background pt-10 pb-14 md:pt-16 md:pb-20 overflow-hidden flex min-h-[calc(100svh-5rem)] items-center">
+        <div className="container-custom w-full">
           <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-12">
             <div className="flex-1 w-full max-w-2xl">
               <motion.h1
@@ -164,52 +168,79 @@ export default function Home() {
       <section className={`${sectionY} bg-surface`}>
         <div className="container-custom">
           <SectionHeading
+            center
             eyebrow="Find your path"
-            title="Browse by level"
-            subtitle="From SSC to university, pick your level and find complete subject courses."
-            action={<ViewAllLink href="/courses">All courses</ViewAllLink>}
+            title="Explore by level"
+            subtitle="Find the right courses for your next learning milestone."
           />
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+
+          <div className="mx-auto grid max-w-3xl grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 sm:gap-x-8 sm:gap-y-10">
             {LEVELS.map((level, i) => {
               const meta = levelMeta[level];
-              const count = levelCounts?.find((l) => l.level === level)?.count ?? 0;
+              const count =
+                levelCounts?.find((l) => l.level === level)?.count ?? 0;
+
               return (
                 <motion.div
                   key={level}
-                  initial={{ opacity: 0, y: 16 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: "-40px" }}
-                  transition={{ duration: 0.4, delay: i * 0.06 }}
+                  initial={{ opacity: 0, scale: 0.85 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.4, delay: i * 0.08 }}
+                  className="flex justify-center"
                 >
                   <Link
                     href={`/courses?level=${level}`}
-                    className={`group relative flex h-full min-h-36 sm:min-h-44 flex-col justify-between overflow-hidden rounded-2xl bg-linear-to-br ${meta.gradient} p-4 sm:p-5 text-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/40`}
+                    className="group flex w-full max-w-[190px] flex-col items-center text-center focus-visible:outline-none"
                   >
-                    {/* Large faded icon in the corner, grows on hover */}
-                    <meta.icon
-                      aria-hidden
-                      strokeWidth={1.5}
-                      className="absolute -right-5 -bottom-5 h-24 w-24 sm:h-28 sm:w-28 opacity-15 transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-6"
-                    />
-                    <div className="relative flex items-start justify-between gap-2">
-                      <span className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
-                        <meta.icon size={20} />
-                      </span>
-                      <span className="rounded-full bg-black/20 px-2 py-0.5 text-[10px] sm:text-[11px] font-bold backdrop-blur-sm">
+                    {/* Circular level card */}
+                    <div
+                      className={`relative flex aspect-square w-full flex-col items-center justify-center overflow-hidden rounded-full bg-linear-to-br ${meta.gradient} text-white shadow-md ring-4 ring-white/60 transition-all duration-300 group-hover:-translate-y-2 group-hover:shadow-xl group-hover:ring-primary/20 group-focus-visible:ring-4 group-focus-visible:ring-primary`}
+                    >
+                      {/* Decorative glow */}
+                      <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/20 blur-2xl transition-transform duration-500 group-hover:scale-150" />
+
+                      {/* Background icon */}
+                      <meta.icon
+                        aria-hidden="true"
+                        strokeWidth={1}
+                        className="absolute -bottom-3 -right-3 h-24 w-24 text-white/10 transition-transform duration-500 group-hover:rotate-12 group-hover:scale-110 sm:h-28 sm:w-28"
+                      />
+
+                      {/* Main icon */}
+                      <div className="relative mb-2 flex h-11 w-11 items-center justify-center rounded-full border border-white/30 bg-white/20 backdrop-blur-sm transition-transform duration-300 group-hover:scale-110 sm:h-14 sm:w-14">
+                        <meta.icon size={26} strokeWidth={1.7} />
+                      </div>
+
+                      <p className="relative text-2xl font-black tracking-tight sm:text-3xl">
+                        {level}
+                      </p>
+
+                      <p className="relative mt-1 max-w-[85%] text-[10px] font-medium leading-tight text-white/85 sm:text-xs">
+                        {meta.fullName}
+                      </p>
+
+                      <span className="relative mt-2 rounded-full bg-black/15 px-2.5 py-1 text-[10px] font-semibold backdrop-blur-sm sm:text-xs">
                         {count} {count === 1 ? "course" : "courses"}
                       </span>
                     </div>
-                    <div className="relative mt-6">
-                      <p className="text-2xl sm:text-3xl font-black tracking-tight">{level}</p>
-                      <p className="mt-0.5 text-[11px] sm:text-xs text-white/80 line-clamp-1">{meta.fullName}</p>
-                      <span className="mt-2 inline-flex items-center gap-1 text-xs font-bold transition-all duration-300 sm:opacity-0 sm:-translate-x-1 group-hover:opacity-100 group-hover:translate-x-0">
-                        Explore <ArrowRight size={14} />
-                      </span>
-                    </div>
+
+                    {/* Label below circle */}
+                    <span className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-foreground transition-colors group-hover:text-primary sm:text-sm">
+                      Explore
+                      <ArrowRight
+                        size={14}
+                        className="transition-transform group-hover:translate-x-1"
+                      />
+                    </span>
                   </Link>
                 </motion.div>
               );
             })}
+          </div>
+
+          <div className="mt-10 flex justify-center">
+            <ViewAllLink href="/courses">Browse all courses</ViewAllLink>
           </div>
         </div>
       </section>
@@ -235,29 +266,32 @@ export default function Home() {
       <section className={`${sectionY} bg-surface`}>
         <div className="container-custom">
           <SectionHeading
+            center
             eyebrow="Learn from the best"
             title="Popular teachers"
             subtitle="Experienced educators who make every concept clear."
-            action={<ViewAllLink href="/teachers">All teachers</ViewAllLink>}
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             {teachers.map((t) => (
               <TeacherCard key={t.id} teacher={t} />
             ))}
           </div>
+          <div className="mt-10 flex justify-center">
+            <ViewAllLink href="/teachers">Browse all teachers</ViewAllLink>
+          </div>
         </div>
       </section>
 
-      {/* Teach on Root Over */}
-      <section className={`${sectionY} bg-background`}>
-        <div className="container-custom">
-          <div className="rounded-2xl border border-border bg-card p-6 sm:p-8 md:p-12 grid md:grid-cols-2 gap-8 md:gap-12 items-center">
+      {/* Teach on Root Over: at least one full screen tall, card centred in it */}
+      <section className={`${sectionY} bg-background flex min-h-svh items-center`}>
+        <div className="container-custom w-full">
+          <div className="rounded-2xl border border-border bg-card p-6 sm:p-10 md:p-14 lg:p-16 grid md:grid-cols-2 gap-10 md:gap-16 items-center">
             <div>
               <p className="mb-2 text-xs font-bold uppercase tracking-widest text-primary">For teachers</p>
-              <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-foreground mb-3">
+              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-foreground mb-4">
                 Teach on Root Over
               </h2>
-              <p className="text-sm sm:text-base text-muted-foreground mb-6">
+              <p className="text-base sm:text-lg text-muted-foreground mb-8">
                 Publish complete subject courses, set your own price and coupons, and withdraw your earnings to bKash.
               </p>
               <Link
@@ -267,15 +301,15 @@ export default function Home() {
                 Apply as a teacher <ArrowRight size={18} />
               </Link>
             </div>
-            <ul className="space-y-5">
+            <ul className="space-y-6 md:space-y-8">
               {teachSteps.map((step) => (
                 <li key={step.title} className="flex gap-4">
-                  <div className="w-11 h-11 shrink-0 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                    <step.icon size={20} />
+                  <div className="w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                    <step.icon size={22} />
                   </div>
                   <div>
-                    <p className="font-bold text-foreground">{step.title}</p>
-                    <p className="text-sm text-muted-foreground">{step.text}</p>
+                    <p className="font-bold text-foreground md:text-lg">{step.title}</p>
+                    <p className="text-sm md:text-base text-muted-foreground">{step.text}</p>
                   </div>
                 </li>
               ))}

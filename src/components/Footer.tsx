@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { CreditCard, Globe, Link as LinkIcon, MapPin, Phone, Radical, Smartphone } from "lucide-react";
 import { Facebook, Instagram, Linkedin, Twitter, Youtube } from "./BrandIcons";
@@ -150,9 +151,17 @@ export default function Footer() {
               {VERSION}
             </span>
           </p>
-          <p className="text-sm font-medium">
-            Crafted by{" "}
-            <span className="group relative inline-block font-bold cursor-default">
+          <p className="flex items-center gap-1.5 text-sm font-medium">
+            Crafted by
+            <span className="group relative inline-flex items-center gap-1.5 font-bold cursor-default">
+              <Image
+                src="/apex-codes-logo.svg"
+                alt=""
+                width={20}
+                height={20}
+                unoptimized
+                className="h-5 w-5 transition-transform duration-300 group-hover:scale-110"
+              />
               {/* Slow gradient sweep across the text; static for reduced-motion users */}
               <span className="bg-linear-to-r from-foreground via-primary to-foreground bg-size-[200%_auto] bg-clip-text text-transparent motion-safe:animate-shimmer">
                 Apex Codes
