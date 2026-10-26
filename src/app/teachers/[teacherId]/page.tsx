@@ -2,7 +2,7 @@
 
 import { Suspense, use } from "react";
 import Link from "next/link";
-import { BadgeCheck, BookOpen, Building2, GraduationCap, Star, UserX, Users } from "lucide-react";
+import { BadgeCheck, BookOpen, Briefcase, Building2, CalendarDays, GraduationCap, Star, UserX, Users } from "lucide-react";
 import CourseCard from "@/components/CourseCard";
 import LoadingAnimation from "@/components/LoadingAnimation";
 import ApiStatus, { ready } from "@/components/ui/ApiStatus";
@@ -56,72 +56,104 @@ function TeacherProfile({ params }: TeacherPageProps) {
   const { teacher, courses } = profile.data;
   const { stats } = teacher;
 
+  const statItems = [
+    { icon: BookOpen, value: stats.courses, label: stats.courses === 1 ? "Course" : "Courses" },
+    { icon: Users, value: stats.students, label: stats.students === 1 ? "Student" : "Students" },
+    {
+      icon: Star,
+      value: stats.rating ? stats.rating.toFixed(1) : "–",
+      label: stats.rating ? `${stats.reviewCount} ${stats.reviewCount === 1 ? "review" : "reviews"}` : "No reviews yet",
+    },
+    { icon: Briefcase, value: `${teacher.experienceYears}+`, label: "Years experience" },
+  ];
+
   return (
     <div className="pb-16">
-      <section className="bg-surface border-b border-border">
-        <div className="container-custom py-10 flex flex-col md:flex-row gap-6 md:items-center">
-          <Avatar name={teacher.name} src={teacher.avatar} size="w-24 h-24 text-2xl" />
-          <div className="flex-1">
-            <h1 className="flex items-center gap-2 text-3xl font-extrabold text-foreground">
-              {teacher.name} <BadgeCheck className="text-primary" aria-label="Verified teacher" />
-            </h1>
-            <p className="text-lg text-muted-foreground">{teacher.headline}</p>
-            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
-              {teacher.institution && (
-                <span className="flex items-center gap-1.5">
-                  <Building2 size={15} /> {teacher.institution}
-                </span>
+      <section className="relative overflow-hidden border-b border-border bg-surface">
+        <div aria-hidden className="absolute inset-x-0 top-0 h-32 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent" />
+        <div className="container-custom relative py-10">
+          <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] gap-8 lg:gap-12">
+            {/* Identity */}
+            <div className="flex flex-col sm:flex-row lg:flex-col gap-5">
+              <Avatar
+                name={teacher.name}
+                src={teacher.avatar}
+                size="w-28 h-28 text-3xl shrink-0 ring-4 ring-background shadow-md"
+              />
+              <div className="min-w-0">
+                <h1 className="flex items-center gap-2 text-3xl font-extrabold text-foreground">
+                  <span className="truncate">{teacher.name}</span>
+                  <BadgeCheck className="shrink-0 text-primary" aria-label="Verified teacher" />
+                </h1>
+                {teacher.headline && <p className="mt-1 text-lg text-muted-foreground">{teacher.headline}</p>}
+                <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                  {teacher.institution && (
+                    <span className="flex items-center gap-1.5">
+                      <Building2 size={15} /> {teacher.institution}
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1.5">
+                    <CalendarDays size={15} /> Teaching since {formatDate(teacher.joinedAt)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* About + qualifications */}
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">About</h2>
+                <p className="mt-2 text-[15px] leading-relaxed text-foreground/90 whitespace-pre-line">
+                  {teacher.bio || "This teacher hasn't added a bio yet."}
+                </p>
+              </div>
+              {teacher.qualifications.length > 0 && (
+                <div>
+                  <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Qualifications</h2>
+                  <ul className="mt-2 flex flex-wrap gap-2">
+                    {teacher.qualifications.map((q) => (
+                      <li
+                        key={q}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1 text-sm"
+                      >
+                        <GraduationCap size={14} className="text-primary" /> {q}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
-              <span className="flex items-center gap-1.5">
-                <BookOpen size={15} /> {stats.courses} courses
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Users size={15} /> {stats.students} students
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Star size={15} /> {stats.rating ? `${stats.rating.toFixed(1)} (${stats.reviewCount} reviews)` : "No reviews yet"}
-              </span>
             </div>
           </div>
+
+          {/* Stats */}
+          <dl className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-3">
+            {statItems.map(({ icon: Icon, value, label }) => (
+              <div key={label} className="flex items-center gap-3 rounded-lg border border-border bg-background p-4">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Icon size={18} />
+                </span>
+                <div className="flex min-w-0 flex-col-reverse">
+                  <dt className="truncate text-xs text-muted-foreground">{label}</dt>
+                  <dd className="text-xl font-extrabold leading-tight text-foreground">{value}</dd>
+                </div>
+              </div>
+            ))}
+          </dl>
         </div>
       </section>
 
-      <div className="container-custom grid lg:grid-cols-3 gap-8 pt-8">
-        <aside className="space-y-4">
-          <div className="rounded-lg border border-border p-5">
-            <h2 className="font-bold mb-2">About</h2>
-            <p className="text-sm text-muted-foreground">{teacher.bio || "This teacher hasn't added a bio yet."}</p>
-            <p className="mt-3 text-sm text-muted-foreground">
-              {teacher.experienceYears} years of experience · Teaching on Root Over since {formatDate(teacher.joinedAt)}
-            </p>
+      <section className="container-custom pt-10">
+        <h2 className="text-xl font-bold mb-5">Courses by {teacher.name}</h2>
+        {courses.length ? (
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
+            {courses.map((c) => (
+              <CourseCard key={c.id} course={c} />
+            ))}
           </div>
-          {teacher.qualifications.length > 0 && (
-            <div className="rounded-lg border border-border p-5">
-              <h2 className="font-bold mb-2 flex items-center gap-2">
-                <GraduationCap size={18} className="text-primary" /> Qualifications
-              </h2>
-              <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-1">
-                {teacher.qualifications.map((q) => (
-                  <li key={q}>{q}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </aside>
-
-        <section className="lg:col-span-2">
-          <h2 className="text-lg font-bold mb-4">Courses by {teacher.name}</h2>
-          {courses.length ? (
-            <div className="grid grid-cols-2 gap-3 sm:gap-6">
-              {courses.map((c) => (
-                <CourseCard key={c.id} course={c} />
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No published courses yet.</p>
-          )}
-        </section>
-      </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No published courses yet.</p>
+        )}
+      </section>
     </div>
   );
 }

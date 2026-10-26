@@ -54,7 +54,7 @@ export const adminNav: NavItem[] = [
   { label: "Registration Fees", href: "/admin/payments", icon: CreditCard },
   { label: "Transactions", href: "/admin/transactions", icon: Receipt },
   { label: "Withdrawals", href: "/admin/withdrawals", icon: Wallet },
-  { label: "Reports", href: "/admin/reports", icon: BarChart3 },
+  { label: "Statistics", href: "/admin/reports", icon: BarChart3 },
   { label: "Activity Log", href: "/admin/activity-logs", icon: Activity },
 ];
 

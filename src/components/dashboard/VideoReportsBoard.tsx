@@ -32,10 +32,14 @@ const statusOptions = [
   ...Object.entries(reportStatusLabels).map(([value, label]) => ({ value, label })),
 ];
 
-// The API sorts by what this role has to act on, then newest update; q matches
+// Admins oversee every report (open ones are still with the teacher), so they
+// start on all statuses; teachers start on their to-do list. The API sorts by
+// what this role has to act on, then newest update, under any filter; q matches
 // the course, the lesson or the student. Counts cover every report the role sees.
+const defaultStatus: Record<Mode, string> = { teacher: "action", admin: "" };
+
 export default function VideoReportsBoard({ mode }: { mode: Mode }) {
-  const [status, setStatus] = useState("action");
+  const [status, setStatus] = useState(defaultStatus[mode]);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [viewingId, setViewingId] = useState<string | null>(null);

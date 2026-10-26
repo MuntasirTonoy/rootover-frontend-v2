@@ -15,7 +15,7 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Commission reports" description={`Root Over earns ${config ? `${config.commissionRate * 100}%` : "a commission"} of every course sale plus teacher registration fees.`} />
+      <PageHeader title="Commission statistics" description={`Root Over earns ${config ? `${config.commissionRate * 100}%` : "a commission"} of every course sale plus teacher registration fees.`} />
       {!ready(reports) ? <ApiStatus state={reports} /> : <Report data={reports.data} />}
     </div>
   );

@@ -30,6 +30,11 @@ function Overview({ data }: { data: AdminOverview }) {
         href="/admin/video-reports"
         text="video fix(es) waiting for your approval"
       />
+      <ReportsAlert
+        count={data.reports.open}
+        href="/admin/video-reports"
+        text="reported video(s) still waiting for the teacher's fix"
+      />
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard label="Students" value={counts.students} icon={Users} />
