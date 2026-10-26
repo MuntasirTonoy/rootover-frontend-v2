@@ -17,7 +17,7 @@ const statusHints: Record<ReportStatus, string> = {
   open: "Waiting for the teacher to fix this video.",
   fix_submitted: "The teacher submitted a fix. An admin is checking it.",
   fix_rejected: "An admin sent the fix back to the teacher. It's being worked on again.",
-  resolved: "Fixed. Thanks for reporting it!",
+  resolved: "Fixed and approved. Thanks for reporting it! If you notice a new problem with this video, you can report it again from the lesson.",
 };
 
 const statusOptions = [
@@ -97,7 +97,7 @@ function ReportCard({ report }: { report: VideoReportView }) {
         <dd className="font-medium">{formatDate(report.createdAt)}</dd>
         {report.resolvedAt && (
           <>
-            <dt className="text-muted-foreground">Fixed</dt>
+            <dt className="text-muted-foreground">Approved</dt>
             <dd className="font-medium">{formatDate(report.resolvedAt)}</dd>
           </>
         )}
@@ -110,7 +110,7 @@ function ReportCard({ report }: { report: VideoReportView }) {
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Link href={`/learn/${report.course.id}?lesson=${report.lesson.id}`} className={btn.small}>
-          <PlayCircle size={14} /> Open lesson
+          <PlayCircle size={14} /> {report.status === "resolved" ? "Open lesson (report again)" : "Open lesson"}
         </Link>
         <button
           type="button"

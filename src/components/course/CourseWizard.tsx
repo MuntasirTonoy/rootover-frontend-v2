@@ -60,7 +60,6 @@ export function blankCourse(teacherId: string): Course {
     price: 1000,
     status: "draft",
     chapters: [newChapter()],
-    reviews: [],
     createdAt: now,
     updatedAt: now,
   };

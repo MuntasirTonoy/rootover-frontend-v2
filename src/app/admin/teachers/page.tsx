@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Eye } from "lucide-react";
 import BanToggle from "@/components/dashboard/BanToggle";
+import FeatureToggle from "@/components/dashboard/FeatureToggle";
 import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import DataTable from "@/components/ui/DataTable";
 import { Avatar, FilterSelect, PageHeader, SearchInput, StatusBadge } from "@/components/ui/primitives";
@@ -76,6 +77,20 @@ export default function AdminTeachersPage() {
                   <Link href={`/teachers/${t.id}`} className={btn.small}>
                     <Eye size={14} /> Profile
                   </Link>
+                  {/* Home page pick; shown there while they have a live course */}
+                  <FeatureToggle
+                    path={`/admin/teachers/${t.id}/featured`}
+                    name={t.name}
+                    featured={t.featured}
+                    disabled={t.status !== "active"}
+                    disabledReason="Banned teachers can't be featured"
+                    onChange={(featured) =>
+                      list.setData((prev) => ({
+                        ...prev!,
+                        data: prev!.data.map((row) => (row.id === t.id ? { ...row, featured } : row)),
+                      }))
+                    }
+                  />
                   <BanToggle
                     user={{ id: t.userId, name: t.name, role: "teacher", status: t.status }}
                     onChange={(next) =>

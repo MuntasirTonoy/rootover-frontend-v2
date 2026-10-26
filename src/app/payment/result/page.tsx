@@ -63,7 +63,7 @@ function PaymentResult() {
 
   if (p.state === "completed") {
     return (
-      <Outcome icon="completed" title="Payment successful!" text={isCourse ? `${what} has been added to My Classes.` : "Your application is now under final verification."}>
+      <Outcome icon="completed" title="Payment successful!" text={isCourse ? `${what} has been added to My Classes.` : "Your teacher account is approved. Your teacher tools are now unlocked."}>
         <p className="mb-6 text-sm text-muted-foreground">
           Paid {formatBDT(p.amount)} via {via}
           {p.trxId && (
@@ -84,7 +84,7 @@ function PaymentResult() {
           </>
         ) : (
           <Link href="/teacher/apply" className={btn.primary}>
-            View your application
+            Continue to your teacher account
           </Link>
         )}
       </Outcome>

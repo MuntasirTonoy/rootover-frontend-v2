@@ -5,7 +5,7 @@ import DataTable from "@/components/ui/DataTable";
 import SalesChart from "@/components/ui/SalesChart";
 import { PageHeader, Section, StatCard } from "@/components/ui/primitives";
 import type { AdminReports } from "@/lib/api-types";
-import { formatBDT } from "@/lib/format";
+import { formatBDT, formatPercent } from "@/lib/format";
 import { useConfig } from "@/lib/use-config";
 import { useApi } from "@/lib/use-api";
 
@@ -15,7 +15,7 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Commission statistics" description={`Root Over earns ${config ? `${config.commissionRate * 100}%` : "a commission"} of every course sale plus teacher registration fees.`} />
+      <PageHeader title="Commission statistics" description={`Root Over earns ${config ? formatPercent(config.commissionRate) : "a commission"} of every course sale plus teacher registration fees.`} />
       {!ready(reports) ? <ApiStatus state={reports} /> : <Report data={reports.data} />}
     </div>
   );

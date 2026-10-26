@@ -34,6 +34,8 @@ export interface TeacherProfile {
   institution: string;
   experienceYears: number;
   joinedAt: string;
+  // Picked by an admin for the home page
+  featured: boolean;
 }
 
 export type ApplicationStatus =
@@ -107,14 +109,6 @@ export interface Chapter {
   lessons: Lesson[];
 }
 
-export interface Review {
-  id: string;
-  studentName: string;
-  rating: number;
-  comment: string;
-  date: string;
-}
-
 export interface Course {
   id: string;
   teacherId: string;
@@ -129,7 +123,7 @@ export interface Course {
   status: CourseStatus;
   statusNote?: string;
   chapters: Chapter[];
-  reviews: Review[];
+  rating?: { average: number; count: number };
   featured?: boolean;
   createdAt: string;
   updatedAt: string;

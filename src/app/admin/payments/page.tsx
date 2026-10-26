@@ -19,7 +19,7 @@ export default function RegistrationFeesPage() {
 
   return (
     <div>
-      <PageHeader title="Registration fees" description="One-time ৳300 teacher registration payments." />
+      <PageHeader title="Registration fees" description="One-time teacher registration payments. Each shows the fee in force when it was paid." />
       {list.data && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           <StatCard label="Fees collected" value={formatBDT(list.data.totals.collected)} />

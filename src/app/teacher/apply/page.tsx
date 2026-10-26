@@ -27,7 +27,9 @@ import type { ApplicationStatus, RegistrationFee, TeacherApplication } from "@/l
 import { useApi } from "@/lib/use-api";
 import { btn, field, fieldError } from "@/lib/ui";
 
-const steps: { status: ApplicationStatus; label: string }[] = [
+// Paying the fee approves the application automatically. "Verification" only
+// appears for applications paid before that (an admin still approves those).
+const allSteps: { status: ApplicationStatus; label: string }[] = [
   { status: "pending_review", label: "Admin review" },
   { status: "payment_required", label: "Registration fee" },
   { status: "under_verification", label: "Verification" },
@@ -83,6 +85,7 @@ export default function TeacherApplyPage() {
 }
 
 function StatusTracker({ application }: { application: TeacherApplication }) {
+  const steps = allSteps.filter((s) => s.status !== "under_verification" || application.status === "under_verification");
   const current = steps.findIndex((s) => s.status === application.status);
   const rejected = application.status === "rejected";
   return (
@@ -145,14 +148,17 @@ function StatusPanel({
     pending_review: {
       icon: FileSearch,
       title: "Your application is being reviewed",
-      body: "An admin is checking your details and documents. You'll be asked to pay the registration fee once it passes review.",
+      body: "An admin is checking your details and documents. Once it passes review we'll email you to pay the registration fee; paying it approves your account.",
     },
     payment_required: {
       icon: CreditCard,
       title: "Pay the registration fee",
       body: (
         <>
-          <p>Your application passed the first review. Pay the one-time {formatBDT(feeAmount)} registration fee to continue.</p>
+          <p>
+            Your application passed the review. Pay the one-time {formatBDT(feeAmount)} registration fee and your teacher
+            account is <b className="text-foreground">approved automatically</b> as soon as bKash confirms the payment.
+          </p>
           <button onClick={pay} disabled={paying} className={`${btn.primary} mt-4`}>
             {paying && <Loader2 size={16} className="animate-spin" />}
             {paying ? "Opening bKash..." : `Pay ${formatBDT(feeAmount)} with bKash`}
@@ -387,7 +393,7 @@ function ApplicationForm({ defaultName, onSubmitted }: { defaultName: string; on
 
       <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 border-t border-border pt-4">
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <CheckCircle2 size={14} /> After review you&apos;ll pay a one-time {formatBDT(fee)} fee through bKash.
+          <CheckCircle2 size={14} /> After review you&apos;ll pay a one-time {formatBDT(fee)} fee through bKash, which approves your account instantly.
         </p>
         <button type="submit" disabled={submitting} className={btn.primary}>
           {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}

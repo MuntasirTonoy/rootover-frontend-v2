@@ -5,7 +5,7 @@ import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import DataTable from "@/components/ui/DataTable";
 import SalesChart from "@/components/ui/SalesChart";
 import { FilterSelect, PageHeader, Section, StatCard, StatusBadge } from "@/components/ui/primitives";
-import { formatBDT, formatDateTime } from "@/lib/format";
+import { formatBDT, formatDateTime, formatPercent } from "@/lib/format";
 import { useConfig } from "@/lib/use-config";
 import { withQuery } from "@/lib/api";
 import type { PurchaseView, TeacherCourseRow, TeacherEarnings } from "@/lib/api-types";
@@ -23,13 +23,13 @@ export default function EarningsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Earnings" description={`Your sales and balance. The platform commission is ${config ? `${config.commissionRate * 100}%` : "a share"} of what the student paid.`} />
+      <PageHeader title="Earnings" description={`Your sales and balance. The platform commission is ${config ? formatPercent(config.commissionRate) : "a share"} of what the student paid.`} />
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard label="List value of sales" value={formatBDT(finance.listTotal)} hint={`${finance.sales} sales before discounts`} />
         <StatCard label="Discounts given" value={formatBDT(finance.discounts)} hint="Course discounts + coupons" />
         <StatCard label="Gross sales" value={formatBDT(finance.gross)} hint="Amount students paid" />
-        <StatCard label={config ? `Platform fee (${config.commissionRate * 100}%)` : "Platform fee"} value={formatBDT(finance.commission)} />
+        <StatCard label="Platform fee" value={formatBDT(finance.commission)} hint={config ? `Now ${formatPercent(config.commissionRate)} of new sales` : undefined} />
       </div>
 
       <Section title="Where your net earnings are">

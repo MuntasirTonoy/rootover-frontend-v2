@@ -7,8 +7,9 @@ import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import SalesChart from "@/components/ui/SalesChart";
 import { PageHeader, Section, StatCard, StatusBadge } from "@/components/ui/primitives";
 import type { AdminOverview } from "@/lib/api-types";
-import { formatBDT, formatDate, formatDateTime } from "@/lib/format";
+import { formatBDT, formatDate, formatDateTime, formatPercent } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
+import { useConfig } from "@/lib/use-config";
 
 export default function AdminDashboard() {
   const overview = useApi<AdminOverview>("/admin/overview");
@@ -22,6 +23,7 @@ export default function AdminDashboard() {
 }
 
 function Overview({ data }: { data: AdminOverview }) {
+  const config = useConfig();
   const { counts, totals } = data;
   return (
     <>
@@ -42,7 +44,7 @@ function Overview({ data }: { data: AdminOverview }) {
         <StatCard label="Live courses" value={counts.liveCourses} icon={BookOpen} hint={`${counts.pendingCourses} awaiting approval`} />
         <StatCard label="Course sales" value={counts.sales} icon={Receipt} hint={`${counts.refunded} refunded`} />
         <StatCard label="Gross sales" value={formatBDT(totals.gross)} icon={Coins} hint="Paid by students" />
-        <StatCard label="Platform commission" value={formatBDT(totals.commission)} hint="10% of gross sales" />
+        <StatCard label="Platform commission" value={formatBDT(totals.commission)} hint={config ? `Now ${formatPercent(config.commissionRate)} of new sales` : undefined} />
         <StatCard label="Teacher earnings" value={formatBDT(totals.teacherNet)} hint="Gross minus commission" />
         <StatCard
           label="Registration fees"

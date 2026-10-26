@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   Library,
   Receipt,
+  Settings,
   ShieldCheck,
   User,
   UserCog,
@@ -56,6 +57,7 @@ export const adminNav: NavItem[] = [
   { label: "Withdrawals", href: "/admin/withdrawals", icon: Wallet },
   { label: "Statistics", href: "/admin/reports", icon: BarChart3 },
   { label: "Activity Log", href: "/admin/activity-logs", icon: Activity },
+  { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 
 // Where each role lands after signing in

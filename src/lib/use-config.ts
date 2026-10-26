@@ -30,3 +30,8 @@ export function useConfig(): PlatformConfig | undefined {
   }, []);
   return config;
 }
+
+// After an admin changes the fees: the next useConfig() mount fetches again
+export function invalidateConfig() {
+  cached = null;
+}

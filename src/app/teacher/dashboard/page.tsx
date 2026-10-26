@@ -70,7 +70,7 @@ export default function TeacherDashboard() {
               <dd>{formatBDT(finance.gross)}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-muted-foreground">Platform commission (10%)</dt>
+              <dt className="text-muted-foreground">Platform commission</dt>
               <dd>-{formatBDT(finance.commission)}</dd>
             </div>
             <div className="flex justify-between border-t border-border pt-2.5 font-bold">

@@ -58,7 +58,7 @@ function TeacherArea({ children }: { children: React.ReactNode }) {
           description={
             user!.role === "admin"
               ? "Admins manage teachers from the admin dashboard."
-              : "Apply to become a teacher. Once an admin approves your application, these tools unlock."
+              : "Apply to become a teacher. Once your application is approved, these tools unlock."
           }
           action={
             <Link href={user!.role === "admin" ? "/admin/dashboard" : "/teacher/apply"} className={btn.primary}>

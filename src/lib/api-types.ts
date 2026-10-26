@@ -14,7 +14,6 @@ import type {
   RegistrationFee,
   ReportReason,
   ReportStatus,
-  Review,
   Role,
   TeacherApplication,
   TeacherProfile,
@@ -153,12 +152,10 @@ export interface CourseDetail extends Omit<CourseSummary, "teacher"> {
   // false = the owner or an admin previewing a course that isn't in the catalog
   published: boolean;
   chapters: ChapterPublic[];
-  reviews: Review[];
-  // The signed-in student's own review, to pre-fill the rating form
-  myReview?: Review;
   teacher: TeacherPublic;
   access: { enrolled: boolean; owner: boolean; full: boolean };
-  enrollment?: { progress: Progress; resumeLessonId?: string; completedLessonIds: string[] };
+  // rated: this buyer has already rated the course (each buyer rates once)
+  enrollment?: { progress: Progress; resumeLessonId?: string; completedLessonIds: string[]; rated: boolean };
 }
 
 export interface Facets {
@@ -374,6 +371,8 @@ export interface AdminCourseRow {
   chapterCount: number;
   lessonCount: number;
   durationMin: number;
+  // Picked by an admin for the home page
+  featured: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -499,4 +498,12 @@ export interface VideoReportView {
 // GET /teacher/reports and /admin/video-reports; counts cover every report the role can see
 export interface VideoReportBoard extends Paginated<VideoReportView> {
   counts: { needsFix: number; awaitingApproval: number; resolved: number };
+}
+
+// GET/PUT /admin/settings: the admin-editable platform fees
+export interface PlatformSettingsView {
+  commissionPercent: number;
+  registrationFee: number;
+  updatedAt: string;
+  updatedBy?: string;
 }

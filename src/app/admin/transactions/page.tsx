@@ -31,7 +31,7 @@ export default function TransactionsPage() {
       {totals && (
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <StatCard label="Gross sales" value={formatBDT(totals.gross)} hint={`${totals.sales} completed`} />
-          <StatCard label="Commission (10%)" value={formatBDT(totals.commission)} />
+          <StatCard label="Commission" value={formatBDT(totals.commission)} hint="At the rate in force when each sale was made" />
           <StatCard label="Teacher earnings" value={formatBDT(totals.teacherNet)} />
           <StatCard label="Refunded" value={formatBDT(totals.refunds)} hint={`${totals.refundedCount} refunds, excluded above`} />
         </div>

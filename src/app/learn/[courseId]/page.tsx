@@ -358,12 +358,14 @@ function Player({ params }: LearnPageProps) {
                         </a>
                       )}
                       {showReport && enrollment && (
+                        // Each buyer rates once, so it turns into a disabled "Rated" afterwards
                         <button
                           onClick={() => setRatingOpen(true)}
-                          className={`${btn.secondary} max-sm:px-2! ${course.myReview ? "border-amber-400/50" : ""}`}
+                          disabled={enrollment.rated}
+                          className={`${btn.secondary} max-sm:px-2! ${enrollment.rated ? "border-amber-400/50" : ""}`}
                         >
-                          <Star size={16} className={course.myReview ? "fill-amber-400 text-amber-400" : ""} />
-                          {course.myReview ? `Rated ${course.myReview.rating}` : "Rate"}
+                          <Star size={16} className={enrollment.rated ? "fill-amber-400 text-amber-400" : ""} />
+                          {enrollment.rated ? "Rated" : "Rate"}
                         </button>
                       )}
                       {showReport && (
@@ -410,8 +412,8 @@ function Player({ params }: LearnPageProps) {
         <Modal open={ratingOpen} onClose={() => setRatingOpen(false)} title="Rate this course" size="md">
           <RateCourseForm
             courseId={course.id}
-            myReview={course.myReview}
-            onSaved={() => {
+            rated={!!enrollment?.rated}
+            onRated={() => {
               setRatingOpen(false);
               player.reload();
             }}

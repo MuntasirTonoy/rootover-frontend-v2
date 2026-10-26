@@ -32,14 +32,12 @@ const statusOptions = [
   ...Object.entries(reportStatusLabels).map(([value, label]) => ({ value, label })),
 ];
 
-// Admins oversee every report (open ones are still with the teacher), so they
-// start on all statuses; teachers start on their to-do list. The API sorts by
-// what this role has to act on, then newest update, under any filter; q matches
-// the course, the lesson or the student. Counts cover every report the role sees.
-const defaultStatus: Record<Mode, string> = { teacher: "action", admin: "" };
-
+// Both roles start on all statuses, so finished reports stay visible (as
+// "Approved") instead of dropping off the to-do list; the API still sorts what
+// this role has to act on first, then newest update. q matches the course, the
+// lesson or the student. Counts cover every report the role sees.
 export default function VideoReportsBoard({ mode }: { mode: Mode }) {
-  const [status, setStatus] = useState(defaultStatus[mode]);
+  const [status, setStatus] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [viewingId, setViewingId] = useState<string | null>(null);
@@ -70,7 +68,7 @@ export default function VideoReportsBoard({ mode }: { mode: Mode }) {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <StatCard label="Needs teacher fix" value={counts.needsFix} icon={Flag} hint="Open or fix rejected" />
           <StatCard label="Awaiting admin approval" value={counts.awaitingApproval} hint="Fix submitted" />
-          <StatCard label="Resolved" value={counts.resolved} />
+          <StatCard label="Approved" value={counts.resolved} hint="Fix approved, report closed" />
         </div>
       )}
       <div className="mb-4 flex flex-col sm:flex-row gap-2">
@@ -236,7 +234,8 @@ function ReportDetail({
             <Link href={`/learn/${report.course.id}?lesson=${report.lesson.id}`} target="_blank" className={btn.small}>
               <PlayCircle size={14} /> Open in player
             </Link>
-            {mode === "teacher" && (
+            {/* Only while the teacher still has something to fix */}
+            {canFix && (
               <Link href={`/teacher/courses/${report.course.id}/edit`} className={btn.small}>
                 <Pencil size={14} /> Edit lesson in course editor
               </Link>

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Ban, CheckCircle2, Eye, RotateCcw, XCircle } from "lucide-react";
 import CourseThumb from "@/components/course/CourseThumb";
 import CurriculumList from "@/components/course/CurriculumList";
+import FeatureToggle from "@/components/dashboard/FeatureToggle";
 import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import DataTable from "@/components/ui/DataTable";
 import Modal from "@/components/ui/Modal";
@@ -151,6 +152,20 @@ export default function AdminCoursesPage() {
                   <button onClick={() => setViewingId(c.id)} className={btn.small}>
                     <Eye size={14} /> Review
                   </button>
+                  {/* Home page pick; only live courses can be featured */}
+                  <FeatureToggle
+                    path={`/admin/courses/${c.id}/featured`}
+                    name={c.title}
+                    featured={c.featured}
+                    disabled={c.status !== "approved"}
+                    disabledReason="Only live (approved) courses can be featured"
+                    onChange={(featured) =>
+                      list.setData((prev) => ({
+                        ...prev!,
+                        data: prev!.data.map((row) => (row.id === c.id ? { ...row, featured } : row)),
+                      }))
+                    }
+                  />
                   {actions(c)}
                 </div>
               ),

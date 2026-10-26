@@ -15,7 +15,7 @@ export const reportStatusLabels: Record<ReportStatus, string> = {
   open: "Open",
   fix_submitted: "Fix Submitted",
   fix_rejected: "Fix Rejected",
-  resolved: "Resolved",
+  resolved: "Approved",
 };
 
 export const eventLabels: Record<VideoReportView["events"][number]["type"], string> = {

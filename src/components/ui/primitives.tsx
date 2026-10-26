@@ -45,7 +45,7 @@ const statusStyles: Record<string, [Tone, string]> = {
   open: ["amber", "Open"],
   fix_submitted: ["blue", "Fix Submitted"],
   fix_rejected: ["red", "Fix Rejected"],
-  resolved: ["green", "Resolved"],
+  resolved: ["green", "Approved"],
 };
 
 export function StatusBadge({ status, label }: { status: string; label?: string }) {
@@ -158,7 +158,7 @@ export function Avatar({
 
 export function Stars({ rating, count }: { rating: number; count?: number }) {
   if (!count && count !== undefined) {
-    return <span className="text-xs text-muted-foreground">No reviews yet</span>;
+    return <span className="text-xs text-muted-foreground">No ratings yet</span>;
   }
   return (
     <span className="inline-flex items-center gap-1 text-xs">

@@ -12,7 +12,7 @@ import { Badge, courseStatusLabel, EmptyBlock, Stars, StatusBadge } from "@/comp
 import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import { useApp } from "@/context/AppStore";
 import type { CourseDetail } from "@/lib/api-types";
-import { formatBDT, formatDate, formatDuration } from "@/lib/format";
+import { formatBDT, formatDuration } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
 import { btn } from "@/lib/ui";
 
@@ -223,31 +223,23 @@ function CourseDetails({ params }: CoursePageProps) {
           </section>
 
           <section id="reviews" className="scroll-mt-24">
-            <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="text-lg font-bold">Student reviews</h2>
-              <Stars rating={rating.average} count={rating.count} />
-            </div>
-            {/* Only students who bought the course can rate it (the API checks too) */}
-            {enrollment && user?.role === "student" && (
-              <div className="mb-5 rounded-lg border border-primary/30 bg-primary/5 p-4">
-                <h3 className="mb-3 font-bold">{course.myReview ? "Your rating" : "Rate this course"}</h3>
-                <RateCourseForm courseId={course.id} myReview={course.myReview} onSaved={detail.reload} />
+            <h2 className="text-lg font-bold mb-4">Student rating</h2>
+            <div className="flex items-center gap-4 rounded-lg border border-border p-4">
+              <p className="text-4xl font-extrabold text-foreground">{rating.count ? rating.average.toFixed(1) : "–"}</p>
+              <div>
+                <Stars rating={rating.average} />
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {rating.count
+                    ? `Based on ${rating.count} ${rating.count === 1 ? "rating" : "ratings"} from students who bought this course`
+                    : "No ratings yet"}
+                </p>
               </div>
-            )}
-            {course.reviews.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No reviews yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {course.reviews.map((r) => (
-                  <div key={r.id} className="rounded-lg border border-border p-4">
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <span className="font-semibold text-sm">{r.studentName}</span>
-                      <span className="text-xs text-muted-foreground">{formatDate(r.date)}</span>
-                    </div>
-                    <Stars rating={r.rating} />
-                    {r.comment && <p className="mt-2 text-sm text-muted-foreground">{r.comment}</p>}
-                  </div>
-                ))}
+            </div>
+            {/* Only students who bought the course can rate it, once (the API checks too) */}
+            {enrollment && user?.role === "student" && (
+              <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-4">
+                {!enrollment.rated && <h3 className="mb-3 font-bold">Rate this course</h3>}
+                <RateCourseForm courseId={course.id} rated={enrollment.rated} onRated={detail.reload} />
               </div>
             )}
           </section>

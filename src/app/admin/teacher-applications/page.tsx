@@ -105,7 +105,7 @@ export default function TeacherApplicationsPage() {
     <div>
       <PageHeader
         title="Teacher applications"
-        description="Review → request ৳300 fee → applicant pays through bKash → verify and approve."
+        description="Review → request the registration fee (the applicant is emailed) → paying it through bKash approves the teacher automatically."
       />
       <div className="mb-4 flex flex-col sm:flex-row gap-2">
         <SearchInput value={query} onChange={filter(setQuery)} placeholder="Search applicants" className="flex-1" />

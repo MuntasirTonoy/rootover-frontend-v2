@@ -42,7 +42,7 @@ const stats = [
 ];
 
 const teachSteps = [
-  { icon: BadgeCheck, title: "Get verified", text: "Submit your documents and a one-time ৳300 registration fee." },
+  { icon: BadgeCheck, title: "Get verified", text: "Submit your documents and pay a one-time registration fee to get approved." },
   { icon: PlayCircle, title: "Build your course", text: "Add chapters and lessons with YouTube unlisted videos." },
   { icon: Wallet, title: "Earn  highest from each sale", text: "Root Over keeps a lowest platform commission." },
 ];

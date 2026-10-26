@@ -5,6 +5,11 @@ export function formatBDT(amount: number | undefined): string {
   return `${sign}৳${Math.round(Math.abs(amount)).toLocaleString("en-US")}`;
 }
 
+// A rate such as 0.125 as "12.5%" (no float noise like 7.000000000000001%)
+export function formatPercent(rate: number): string {
+  return `${Math.round(rate * 10_000) / 100}%`;
+}
+
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-GB", {
     day: "numeric",
@@ -42,7 +47,6 @@ export function maskNumber(value: string, visible = 3): string {
 export function uid(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
-
 
 export function initials(name: string): string {
   return name
