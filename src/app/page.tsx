@@ -179,8 +179,8 @@ export default function Home() {
   const router = useRouter();
   const [query, setQuery] = useState("");
 
-  // Picked by an admin (Admin → Courses → Feature), most students first
-  const featured = useApi<Paginated<CourseSummary>>("/courses?featured=true&sort=popular&limit=8");
+  // The first 4 courses by students (ranked by the API from the database)
+  const featured = useApi<Paginated<CourseSummary>>("/courses?sort=popular&limit=4");
   const levelCounts = useApi<Facets>("/courses/facets").data?.levels;
   // Picked by an admin (Admin → Teachers → Feature), most students first
   const teachers = useApi<TeacherPublic[]>("/teachers?featured=true");
@@ -343,7 +343,7 @@ export default function Home() {
       <section id="popular-courses" className={`${sectionY} bg-background`}>
         <div className="container-custom">
           <SectionHeading
-            eyebrow="Hand-picked"
+            eyebrow="Top rated"
             title="Featured courses"
             subtitle="Complete courses from verified teachers, loved by students."
             action={<ViewAllLink href="/courses">View all</ViewAllLink>}
@@ -352,7 +352,7 @@ export default function Home() {
             state={featured}
             items={(d) => d.data}
             skeleton={<CourseSkeleton />}
-            empty="Featured courses are coming soon. Browse all courses meanwhile."
+            empty="No courses published yet. Check back soon!"
             className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6"
           >
             {(course) => <CourseCard key={course.id} course={course} />}
