@@ -97,7 +97,7 @@ function Player({ params }: LearnPageProps) {
 
   // "Continue learning" position; the API ignores it unless the student is enrolled
   useEffect(() => {
-    if (watchable && lesson && enrollment && user?.role === "student")
+    if (watchable && lesson && enrollment && (user?.role === "student" || user?.role === "teacher"))
       void api(`/learn/${courseId}/lessons/${lesson.id}/watch`, { method: "POST" }).catch(() => undefined);
     // Only when the lesson changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -196,7 +196,8 @@ function Player({ params }: LearnPageProps) {
   const isLearner = !user || user.role === "student";
   const showSave = watchable && isLearner;
   const showReport = watchable && user?.role === "student";
-  const showComplete = watchable && isLearner && !!enrollment;
+  // A teacher who bought the course before becoming one still tracks progress
+  const showComplete = watchable && !!enrollment && (isLearner || user?.role === "teacher");
 
   const contentHeader = (
     <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
@@ -213,7 +214,13 @@ function Player({ params }: LearnPageProps) {
       <header className="border-b border-border bg-card">
         <div className="flex items-center gap-3 px-3 py-2.5 sm:px-4 lg:px-6">
           <Link
-            href={enrollment && user?.role === "student" ? "/my-classes" : `/courses/${course.id}`}
+            href={
+              enrollment && user?.role === "student"
+                ? "/my-classes"
+                : enrollment && user?.role === "teacher"
+                  ? "/teacher/purchased"
+                  : `/courses/${course.id}`
+            }
             className="shrink-0 rounded-md p-2 hover:bg-surface"
             aria-label="Back"
           >

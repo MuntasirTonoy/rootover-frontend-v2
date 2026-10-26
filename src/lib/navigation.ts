@@ -41,6 +41,7 @@ export const teacherNav: NavItem[] = [
   { label: "Coupons", href: "/teacher/coupons", icon: BadgePercent },
   { label: "Earnings", href: "/teacher/earnings", icon: BarChart3 },
   { label: "Withdrawals", href: "/teacher/withdrawals", icon: Wallet },
+  { label: "Purchased Courses", href: "/teacher/purchased", icon: Library },
   { label: "Teacher Profile", href: "/teacher/profile", icon: UserCog },
 ];
 

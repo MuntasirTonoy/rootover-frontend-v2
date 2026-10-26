@@ -7,7 +7,16 @@ import type { EnrolledCourse } from "@/lib/api-types";
 
 // A purchased course with progress and a "Continue learning" action. Phones show
 // these two per row, so progress moves onto the thumbnail and the body is compact.
-export default function EnrolledCourseCard({ item, showTeacher }: { item: EnrolledCourse; showTeacher?: boolean }) {
+// canRate: only students rate courses (teachers see their old purchases without it)
+export default function EnrolledCourseCard({
+  item,
+  showTeacher,
+  canRate = true,
+}: {
+  item: EnrolledCourse;
+  showTeacher?: boolean;
+  canRate?: boolean;
+}) {
   const { course, enrollment, progress, resumeLessonId: resume, lastLesson: last } = item;
   const teacherName = showTeacher ? course.teacher.name : undefined;
   const done = progress.percent === 100;
@@ -52,9 +61,11 @@ export default function EnrolledCourseCard({ item, showTeacher }: { item: Enroll
           ) : (
             "No ratings yet"
           )}
-          <Link href={`/courses/${course.id}#reviews`} className="ml-auto font-semibold text-primary hover:underline">
-            Rate
-          </Link>
+          {canRate && (
+            <Link href={`/courses/${course.id}#reviews`} className="ml-auto font-semibold text-primary hover:underline">
+              Rate
+            </Link>
+          )}
         </p>
 
         <p className="hidden sm:flex mt-3 text-xs text-muted-foreground items-start gap-1.5">

@@ -179,11 +179,11 @@ export default function Home() {
   const router = useRouter();
   const [query, setQuery] = useState("");
 
-  // The 8 courses with the most students (ranked by the API from the database)
-  const featured = useApi<Paginated<CourseSummary>>("/courses?sort=popular&limit=8");
+  // Picked by an admin (Admin → Courses → Feature), most students first
+  const featured = useApi<Paginated<CourseSummary>>("/courses?featured=true&sort=popular&limit=8");
   const levelCounts = useApi<Facets>("/courses/facets").data?.levels;
-  // Ranked by the API: most students, then best rating
-  const teachers = useApi<TeacherPublic[]>("/teachers");
+  // Picked by an admin (Admin → Teachers → Feature), most students first
+  const teachers = useApi<TeacherPublic[]>("/teachers?featured=true");
 
   const handleSearch = (e: FormEvent) => {
     e.preventDefault();
@@ -343,7 +343,7 @@ export default function Home() {
       <section id="popular-courses" className={`${sectionY} bg-background`}>
         <div className="container-custom">
           <SectionHeading
-            eyebrow="Top rated"
+            eyebrow="Hand-picked"
             title="Featured courses"
             subtitle="Complete courses from verified teachers, loved by students."
             action={<ViewAllLink href="/courses">View all</ViewAllLink>}
@@ -352,7 +352,7 @@ export default function Home() {
             state={featured}
             items={(d) => d.data}
             skeleton={<CourseSkeleton />}
-            empty="No courses published yet. Check back soon!"
+            empty="Featured courses are coming soon. Browse all courses meanwhile."
             className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6"
           >
             {(course) => <CourseCard key={course.id} course={course} />}
@@ -360,20 +360,20 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Popular teachers */}
+      {/* Featured teachers */}
       <section className={`${sectionY} bg-surface`}>
         <div className="container-custom">
           <SectionHeading
             center
             eyebrow="Learn from the best"
-            title="Popular teachers"
+            title="Featured teachers"
             subtitle="Experienced educators who make every concept clear."
           />
           <HomeList
             state={teachers}
             items={(d) => d.slice(0, 4)}
             skeleton={<TeacherSkeleton />}
-            empty="Our first teachers are joining soon."
+            empty="Featured teachers are coming soon."
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6"
           >
             {(t) => <TeacherCard key={t.id} teacher={t} />}
