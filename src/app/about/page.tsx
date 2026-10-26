@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { ArrowRight, Mail, MapPin, Globe, Phone, Link as LinkIcon } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
@@ -262,18 +263,19 @@ export default function AboutPage() {
               transition={{ duration: 0.5, delay: i * 0.1 }}
               className="group overflow-hidden rounded-2xl border border-border bg-surface"
             >
-              <div className="aspect-[4/3] overflow-hidden bg-card">
-                <img
+              <div className="relative aspect-square overflow-hidden bg-card">
+                <Image
                   src={founder.photo}
                   alt={founder.name}
-                  loading="lazy"
-                  className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
+                  fill
+                  sizes="(min-width: 640px) 384px, 100vw"
+                  className="object-cover object-top transition-transform duration-500 group-hover:scale-105"
                 />
               </div>
               <figcaption className="p-5 text-center">
                 <p className="text-lg font-bold text-foreground">{founder.name}</p>
                 <p className="mt-0.5 flex items-center justify-center gap-1.5 text-sm font-medium text-primary">
-                  <img src="/rootover-faviocn.png" alt="" className="h-4 w-4" />
+                  <Image src="/rootover-faviocn.png" alt="" width={16} height={16} />
                   {founder.role}
                 </p>
                 <a

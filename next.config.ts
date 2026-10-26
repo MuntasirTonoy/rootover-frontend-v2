@@ -13,6 +13,10 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  images: {
+    // Founder photos on the About page (site-config.ts)
+    remotePatterns: [{ protocol: "https", hostname: "i.ibb.co.com", pathname: "/**" }],
+  },
   headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
