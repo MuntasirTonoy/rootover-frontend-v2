@@ -1,13 +1,17 @@
 "use client";
 
-import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowRight, Loader2, MailCheck, RotateCcw } from "lucide-react";
+import GoogleSignIn from "@/components/GoogleSignIn";
+import OtpInput from "@/components/ui/OtpInput";
+import PasswordInput from "@/components/ui/PasswordInput";
 import { Field } from "@/components/ui/primitives";
 import { useApp } from "@/context/AppStore";
 import { ApiError, errorMessage } from "@/lib/api";
+import { dashboardPath } from "@/lib/navigation";
 import { btn, field, fieldError } from "@/lib/ui";
 
 interface Errors {
@@ -55,6 +59,7 @@ function Register() {
 
 function SignUpStep({ onSent }: { onSent: (email: string, wait: number) => void }) {
   const { register } = useApp();
+  const router = useRouter();
   const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "" });
   const [errors, setErrors] = useState<Errors>({});
   const [loading, setLoading] = useState(false);
@@ -96,6 +101,14 @@ function SignUpStep({ onSent }: { onSent: (email: string, wait: number) => void 
         Every account starts as a student. You can apply to teach later.
       </p>
 
+      <GoogleSignIn
+        text="signup_with"
+        onSignedIn={(user) => {
+          toast.success(`Welcome to Root Over, ${user.name}!`);
+          router.push(dashboardPath(user.role));
+        }}
+      />
+
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         {(
           [
@@ -104,19 +117,21 @@ function SignUpStep({ onSent }: { onSent: (email: string, wait: number) => void 
             ["password", "Password", "password", "new-password"],
             ["confirm", "Confirm password", "password", "new-password"],
           ] as const
-        ).map(([key, label, type, autoComplete]) => (
-          <Field key={key} label={label} htmlFor={key} error={errors[key]}>
-            <input
-              id={key}
-              type={type}
-              autoComplete={autoComplete}
-              value={form[key]}
-              onChange={(e) => set(key)(e.target.value)}
-              aria-invalid={!!errors[key]}
-              className={`${field} ${errors[key] ? fieldError : ""}`}
-            />
-          </Field>
-        ))}
+        ).map(([key, label, type, autoComplete]) => {
+          const props = {
+            id: key,
+            autoComplete,
+            value: form[key],
+            onChange: (e: ChangeEvent<HTMLInputElement>) => set(key)(e.target.value),
+            "aria-invalid": !!errors[key],
+            className: `${field} ${errors[key] ? fieldError : ""}`,
+          };
+          return (
+            <Field key={key} label={label} htmlFor={key} error={errors[key]}>
+              {type === "password" ? <PasswordInput {...props} /> : <input type={type} {...props} />}
+            </Field>
+          );
+        })}
 
         <button type="submit" disabled={loading} className={`${btn.primary} w-full py-3`}>
           {loading ? <Loader2 className="animate-spin" size={18} /> : <ArrowRight size={18} />}
@@ -157,7 +172,8 @@ function VerifyStep({ email, initialWait, onBack }: { email: string; initialWait
     try {
       const user = await verifyEmail(email, code);
       toast.success(`Welcome to Root Over, ${user.name}!`);
-      router.push("/dashboard");
+      // The first account of a new deployment is the admin
+      router.push(dashboardPath(user.role));
     } catch (err) {
       setError(errorMessage(err));
       setLoading(false);
@@ -186,15 +202,16 @@ function VerifyStep({ email, initialWait, onBack }: { email: string; initialWait
 
       <form onSubmit={handleVerify} className="space-y-4" noValidate>
         <Field label="Verification code" htmlFor="code" error={error}>
-          <input
+          <OtpInput
             id="code"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={6}
             value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-            aria-invalid={!!error}
-            className={`${field} text-center font-mono text-xl tracking-[0.5em] ${error ? fieldError : ""}`}
+            onChange={(value) => {
+              setCode(value);
+              setError("");
+            }}
+            invalid={!!error}
+            disabled={loading}
+            autoFocus
           />
         </Field>
         <button type="submit" disabled={loading || code.length !== 6} className={`${btn.primary} w-full py-3`}>

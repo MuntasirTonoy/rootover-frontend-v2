@@ -8,6 +8,7 @@ import Modal from "@/components/ui/Modal";
 import { Avatar, Field, PageHeader } from "@/components/ui/primitives";
 import { useApp } from "@/context/AppStore";
 import { ApiError, errorMessage } from "@/lib/api";
+import PasswordInput from "@/components/ui/PasswordInput";
 import type { EnrolledCourse } from "@/lib/api-types";
 import type { User } from "@/lib/types";
 import { uploadFile } from "@/lib/uploads";
@@ -202,9 +203,8 @@ function ProfileForm({ user }: { user: User }) {
             </Field>
           </div>
           <Field label="New password" htmlFor="password" error={errors.password} hint="Leave blank to keep your current password.">
-            <input
+            <PasswordInput
               id="password"
-              type="password"
               autoComplete="new-password"
               value={form.password}
               onChange={set("password")}
@@ -213,10 +213,21 @@ function ProfileForm({ user }: { user: User }) {
           </Field>
           {/* Needed (and only shown) when changing the password */}
           {form.password && (
-            <Field label="Current password" htmlFor="currentPassword" error={errors.currentPassword}>
-              <input
+            <Field
+              label="Current password"
+              htmlFor="currentPassword"
+              error={errors.currentPassword}
+              hint={
+                <>
+                  Signed up with Google and never set one?{" "}
+                  <Link href={`/forgot-password?email=${encodeURIComponent(user.email)}`} className="font-semibold text-primary hover:underline">
+                    Set a password by email
+                  </Link>
+                </>
+              }
+            >
+              <PasswordInput
                 id="currentPassword"
-                type="password"
                 autoComplete="current-password"
                 value={form.currentPassword}
                 onChange={set("currentPassword")}

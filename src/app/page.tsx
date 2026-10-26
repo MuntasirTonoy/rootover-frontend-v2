@@ -1,15 +1,18 @@
 "use client";
 
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Lottie } from "lottie-react";
 import { motion } from "framer-motion";
 import {
+  AlertCircle,
   ArrowRight,
   BadgeCheck,
   Headphones,
+  Loader2,
   PlayCircle,
+  RotateCcw,
   Search,
   Trophy,
   Users,
@@ -23,8 +26,10 @@ import FAQ from "@/components/FAQ";
 import type { CourseSummary, Facets, Paginated, TeacherPublic } from "@/lib/api-types";
 import { levelMeta } from "@/lib/levels";
 import { banner } from "@/lib/site-config";
-import { useApi } from "@/lib/use-api";
+import { ready } from "@/components/ui/ApiStatus";
+import { useApi, type ApiState } from "@/lib/use-api";
 import { LEVELS } from "@/lib/types";
+import { btn } from "@/lib/ui";
 
 // One vertical rhythm for every landing section
 const sectionY = "py-14 md:py-20";
@@ -39,7 +44,7 @@ const stats = [
 const teachSteps = [
   { icon: BadgeCheck, title: "Get verified", text: "Submit your documents and a one-time ৳300 registration fee." },
   { icon: PlayCircle, title: "Build your course", text: "Add chapters and lessons with YouTube unlisted videos." },
-  { icon: Wallet, title: "Earn 90% of each sale", text: "Root Over keeps a 10% platform commission." },
+  { icon: Wallet, title: "Earn  highest from each sale", text: "Root Over keeps a lowest platform commission." },
 ];
 
 function SectionHeading({
@@ -81,15 +86,104 @@ function ViewAllLink({ href, children }: { href: string; children: ReactNode }) 
   );
 }
 
+// A home page list: placeholder cards while loading (the API may need up to a
+// minute to wake up on a cold start), the error with a retry, or an empty note
+function HomeList<T, I>({
+  state,
+  items,
+  skeleton,
+  empty,
+  className,
+  children,
+}: {
+  state: ApiState<T>;
+  items: (data: T) => I[];
+  skeleton: ReactNode;
+  empty: string;
+  className: string;
+  children: (item: I) => ReactNode;
+}) {
+  const slow = useSlow(!ready(state) && !state.error);
+  if (state.error && !ready(state))
+    return (
+      <div className="flex flex-col items-center gap-3 py-10 text-center">
+        <AlertCircle className="text-red-500" size={32} />
+        <p className="max-w-md text-sm text-muted-foreground">{state.error.message}</p>
+        <button onClick={state.reload} className={btn.secondary}>
+          <RotateCcw size={14} /> Try again
+        </button>
+      </div>
+    );
+  if (!ready(state))
+    return (
+      <div role="status" aria-label="Loading">
+        <div className={className}>
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i}>{skeleton}</div>
+          ))}
+        </div>
+        {slow && (
+          <p className="mt-6 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+            <Loader2 size={16} className="animate-spin" /> Waking up the server, this can take up to a minute…
+          </p>
+        )}
+      </div>
+    );
+  const list = items(state.data);
+  if (list.length === 0) return <p className="py-10 text-center text-muted-foreground">{empty}</p>;
+  return <div className={className}>{list.map(children)}</div>;
+}
+
+// True once `active` has stayed true for 4 seconds
+function useSlow(active: boolean) {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!active) return;
+    const t = setTimeout(() => setSlow(true), 4000);
+    return () => {
+      clearTimeout(t);
+      setSlow(false);
+    };
+  }, [active]);
+  return active && slow;
+}
+
+const bone = "rounded bg-muted/20 animate-pulse";
+
+function CourseSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
+      <div className={`aspect-video w-full ${bone} rounded-none`} />
+      <div className="space-y-2 p-3 sm:p-4">
+        <div className={`h-3 w-1/3 ${bone}`} />
+        <div className={`h-4 w-full ${bone}`} />
+        <div className={`h-4 w-2/3 ${bone}`} />
+        <div className={`mt-3 h-5 w-1/2 ${bone}`} />
+      </div>
+    </div>
+  );
+}
+
+function TeacherSkeleton() {
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-lg border border-border bg-card p-6">
+      <div className={`h-20 w-20 rounded-full ${bone}`} />
+      <div className={`h-4 w-2/3 ${bone}`} />
+      <div className={`h-3 w-1/2 ${bone}`} />
+      <div className={`h-3 w-3/4 ${bone}`} />
+    </div>
+  );
+}
+
 export default function Home() {
   const router = useRouter();
   const [query, setQuery] = useState("");
 
   // The 8 courses with the most students (ranked by the API from the database)
-  const featured = useApi<Paginated<CourseSummary>>("/courses?sort=popular&limit=8").data?.data ?? [];
+  const featured = useApi<Paginated<CourseSummary>>("/courses?sort=popular&limit=8");
   const levelCounts = useApi<Facets>("/courses/facets").data?.levels;
   // Ranked by the API: most students, then best rating
-  const teachers = (useApi<TeacherPublic[]>("/teachers").data ?? []).slice(0, 4);
+  const teachers = useApi<TeacherPublic[]>("/teachers");
 
   const handleSearch = (e: FormEvent) => {
     e.preventDefault();
@@ -177,8 +271,8 @@ export default function Home() {
           <div className="mx-auto grid max-w-3xl grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 sm:gap-x-8 sm:gap-y-10">
             {LEVELS.map((level, i) => {
               const meta = levelMeta[level];
-              const count =
-                levelCounts?.find((l) => l.level === level)?.count ?? 0;
+              // Undefined until the counts arrive
+              const count = levelCounts && (levelCounts.find((l) => l.level === level)?.count ?? 0);
 
               return (
                 <motion.div
@@ -221,7 +315,7 @@ export default function Home() {
                       </p>
 
                       <span className="relative mt-2 rounded-full bg-black/15 px-2.5 py-1 text-[10px] font-semibold backdrop-blur-sm sm:text-xs">
-                        {count} {count === 1 ? "course" : "courses"}
+                        {count === undefined ? "… courses" : `${count} ${count === 1 ? "course" : "courses"}`}
                       </span>
                     </div>
 
@@ -254,11 +348,15 @@ export default function Home() {
             subtitle="Complete courses from verified teachers, loved by students."
             action={<ViewAllLink href="/courses">View all</ViewAllLink>}
           />
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
-            {featured.map((course) => (
-              <CourseCard key={course.id} course={course} />
-            ))}
-          </div>
+          <HomeList
+            state={featured}
+            items={(d) => d.data}
+            skeleton={<CourseSkeleton />}
+            empty="No courses published yet. Check back soon!"
+            className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6"
+          >
+            {(course) => <CourseCard key={course.id} course={course} />}
+          </HomeList>
         </div>
       </section>
 
@@ -271,11 +369,15 @@ export default function Home() {
             title="Popular teachers"
             subtitle="Experienced educators who make every concept clear."
           />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            {teachers.map((t) => (
-              <TeacherCard key={t.id} teacher={t} />
-            ))}
-          </div>
+          <HomeList
+            state={teachers}
+            items={(d) => d.slice(0, 4)}
+            skeleton={<TeacherSkeleton />}
+            empty="Our first teachers are joining soon."
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6"
+          >
+            {(t) => <TeacherCard key={t.id} teacher={t} />}
+          </HomeList>
           <div className="mt-10 flex justify-center">
             <ViewAllLink href="/teachers">Browse all teachers</ViewAllLink>
           </div>

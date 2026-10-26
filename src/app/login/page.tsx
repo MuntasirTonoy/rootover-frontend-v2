@@ -5,8 +5,6 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
-  Eye,
-  EyeOff,
   GraduationCap,
   Loader2,
   Lock,
@@ -15,6 +13,8 @@ import {
   ShieldCheck,
   User,
 } from "lucide-react";
+import GoogleSignIn from "@/components/GoogleSignIn";
+import PasswordInput from "@/components/ui/PasswordInput";
 import { useApp } from "@/context/AppStore";
 import { ApiError, errorMessage } from "@/lib/api";
 import { DEMO_ACCOUNTS } from "@/lib/demo-accounts";
@@ -48,7 +48,6 @@ function LoginForm() {
   const redirect = searchParams.get("redirect");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [demoLoading, setDemoLoading] = useState<Role | null>(null);
@@ -95,6 +94,8 @@ function LoginForm() {
           <h1 className="text-3xl font-extrabold tracking-tight text-foreground mb-1">Welcome back</h1>
           <p className="text-muted-foreground mb-6">Sign in to continue your learning journey.</p>
 
+          <GoogleSignIn onSignedIn={(user) => finish(user, true)} />
+
           <form onSubmit={handleLogin} className="space-y-4" noValidate>
             <div>
               <label htmlFor="email" className="block text-sm font-semibold mb-1.5">
@@ -127,25 +128,16 @@ function LoginForm() {
                 </Link>
               </div>
               <div className="relative">
-                <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <input
+                <Lock size={18} className="absolute left-3 top-1/2 z-10 -translate-y-1/2 text-muted-foreground" />
+                <PasswordInput
                   id="password"
-                  type={showPassword ? "text" : "password"}
                   required
                   autoComplete="current-password"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className={`${field} pl-10 pr-10 py-3`}
+                  className={`${field} pl-10 py-3`}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
               </div>
             </div>
 

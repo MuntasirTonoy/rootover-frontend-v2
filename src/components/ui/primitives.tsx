@@ -247,7 +247,7 @@ export function Field({
   label: string;
   htmlFor?: string;
   error?: string;
-  hint?: string;
+  hint?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
@@ -262,7 +262,7 @@ export function Field({
           {error}
         </p>
       ) : (
-        hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+        hint && <div className="mt-1 text-xs text-muted-foreground">{hint}</div>
       )}
     </div>
   );

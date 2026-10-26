@@ -147,7 +147,7 @@ export default function Footer() {
             </span>
           </p>
           <p className="flex items-center gap-1.5 text-sm font-medium">
-            Clauding… by
+            Clauding by
             <span className="group relative inline-flex items-center gap-1.5 font-bold cursor-default">
               <Image
                 src="/apex-codes-logo.svg"

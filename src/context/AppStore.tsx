@@ -54,6 +54,8 @@ interface AppContextValue {
   // Throw ApiError (code EMAIL_NOT_VERIFIED when the sign-up code is pending)
   login: (email: string, password: string) => Promise<User>;
   loginAs: (role: Role) => Promise<User>;
+  // Signs in (or signs up) with the ID token from the Google button
+  loginWithGoogle: (credential: string) => Promise<User>;
   // Sends a 6-digit code; the account is usable after verifyEmail
   register: (input: { name: string; email: string; password: string }) => Promise<Registration>;
   verifyEmail: (email: string, code: string) => Promise<User>;
@@ -147,6 +149,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return login(account.email, account.password);
   };
 
+  const loginWithGoogle = async (credential: string) =>
+    startSession(await api<Session>("/auth/google", { method: "POST", body: { credential } }));
+
   const register = (input: { name: string; email: string; password: string }) =>
     api<Registration>("/auth/register", { method: "POST", body: input });
 
@@ -187,6 +192,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         user,
         login,
         loginAs,
+        loginWithGoogle,
         register,
         verifyEmail,
         resendVerification,

@@ -62,6 +62,8 @@ export interface PlatformConfig {
   payment: { provider: "bkash" | "simulated"; sandbox: boolean };
   // Demo deployment: one-click demo logins, coupon hints, "Fill demo data"
   demo: boolean;
+  // OAuth client ID for "Continue with Google"; null = Google sign-in is off
+  googleClientId: string | null;
 }
 
 export interface ApiUser {

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowRight, KeyRound, Loader2, MailCheck, RotateCcw } from "lucide-react";
+import OtpInput from "@/components/ui/OtpInput";
+import PasswordInput from "@/components/ui/PasswordInput";
 import { Field } from "@/components/ui/primitives";
 import { useApp } from "@/context/AppStore";
 import { ApiError, errorMessage } from "@/lib/api";
@@ -186,15 +188,16 @@ function ResetStep({ email, initialWait, onBack }: { email: string; initialWait:
 
       <form onSubmit={handleReset} className="space-y-4" noValidate>
         <Field label="Reset code" htmlFor="code" error={errors.code}>
-          <input
+          <OtpInput
             id="code"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={6}
             value={form.code}
-            onChange={(e) => set("code")(e.target.value.replace(/\D/g, ""))}
-            aria-invalid={!!errors.code}
-            className={`${field} text-center font-mono text-xl tracking-[0.5em] ${errors.code ? fieldError : ""}`}
+            onChange={(value) => {
+              set("code")(value);
+              setErrors((e) => ({ ...e, code: undefined }));
+            }}
+            invalid={!!errors.code}
+            disabled={loading}
+            autoFocus
           />
         </Field>
         {(
@@ -204,9 +207,8 @@ function ResetStep({ email, initialWait, onBack }: { email: string; initialWait:
           ] as const
         ).map(([key, label]) => (
           <Field key={key} label={label} htmlFor={key} error={errors[key]}>
-            <input
+            <PasswordInput
               id={key}
-              type="password"
               autoComplete="new-password"
               value={form[key]}
               onChange={(e) => set(key)(e.target.value)}
