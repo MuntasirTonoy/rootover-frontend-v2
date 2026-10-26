@@ -70,7 +70,6 @@ function TeacherProfile({ params }: TeacherPageProps) {
   return (
     <div className="pb-16">
       <section className="relative overflow-hidden border-b border-border bg-surface">
-        <div aria-hidden className="absolute inset-x-0 top-0 h-32 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent" />
         <div className="container-custom relative py-10">
           {/* Photo on the left, everything about the teacher beside it (stacked on phones) */}
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-8">
