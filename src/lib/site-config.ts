@@ -11,12 +11,32 @@ export const banner = {
 export const about = {
   title: "About Root Over Education",
   description:
-    "Root Over Education is a course marketplace where verified teachers publish complete subject courses and students learn them chapter by chapter, from the fundamental roots of each subject to exam-ready problem solving.",
+    "Root Over Education is a course marketplace for Bangladesh where verified teachers publish complete subject courses and students learn them chapter by chapter, from the fundamental roots of each subject to exam-ready problem solving.\n\nWe started Root Over because good teaching is hard to find and harder to afford. Instead of scattered videos and one-off classes, every course here covers a whole subject in order, so students always know what to learn next. Courses span SSC, HSC, BSc, BBA and BA, along with skills and languages.",
   bulletPoints: [
     { title: "Verified Teachers", text: "Every teacher is reviewed and verified before they can publish courses." },
+    { title: "Reviewed Courses", text: "Our team checks each course before it goes live in the catalog." },
     { title: "Complete Subjects", text: "Buy a whole subject once and get every chapter and lesson in it." },
+    { title: "Try Before You Buy", text: "Every course has free preview lessons you can watch without paying." },
     { title: "Learn Anywhere", text: "Watch lessons on any device, track progress and save lessons to revise later." },
+    { title: "Notes and Support", text: "Download lesson notes, and report a problem with any video so the teacher can fix it." },
+    { title: "Simple Payments", text: "Pay once with bKash and keep access to the course." },
   ] satisfies BulletPoint[],
+};
+
+// "How it works" on the About page, one list per side of the marketplace
+export const howItWorks = {
+  students: [
+    { title: "Find a course", text: "Browse by level and subject, or search for a teacher." },
+    { title: "Watch a free preview", text: "See how the teacher explains before you decide." },
+    { title: "Buy the subject", text: "Pay once with bKash and the whole course unlocks." },
+    { title: "Learn and revise", text: "Follow the chapters in order, track progress and rate the course." },
+  ],
+  teachers: [
+    { title: "Apply", text: "Send your details and documents for review." },
+    { title: "Get verified", text: "Pay the one-time registration fee once your application is accepted." },
+    { title: "Publish courses", text: "Build chapters and lessons from your YouTube videos and submit them for review." },
+    { title: "Earn", text: "Earn from every sale and withdraw your balance to bKash." },
+  ],
 };
 
 export const contact = {

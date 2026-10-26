@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Mail, MapPin, Globe, Phone, Link as LinkIcon } from "lucide-react";
+import { ArrowRight, Mail, MapPin, Globe, Phone, Link as LinkIcon } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
@@ -11,7 +11,7 @@ import {
   Twitter,
   Youtube,
 } from "@/components/BrandIcons";
-import { about as aboutConfig, contact as contactConfig, founders, socialLinks } from "@/lib/site-config";
+import { about as aboutConfig, contact as contactConfig, founders, howItWorks, socialLinks } from "@/lib/site-config";
 
 const socialStyles: { match: string; icon: ReactNode; color: string }[] = [
   { match: "facebook", icon: <Facebook size={18} />, color: "text-blue-600 bg-blue-500/10" },
@@ -55,8 +55,8 @@ export default function AboutPage() {
               ))}
             </motion.h1>
             <p className="text-xl text-muted-foreground leading-relaxed">
-              Empowering students to master science subjects with clarity and
-              confidence.
+              Complete courses from verified teachers, so every student can
+              learn each subject with clarity and confidence.
             </p>
           </div>
         </div>
@@ -200,13 +200,59 @@ export default function AboutPage() {
         </div>
       </div>
 
+      {/* How it works */}
+      <section className="container-custom mt-16 md:mt-24">
+        <div className="mb-8 md:mb-10 text-center">
+          <p className="mb-2 text-xs font-bold uppercase tracking-widest text-primary">How it works</p>
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-foreground">
+            One platform, two ways to grow
+          </h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+          {[
+            { heading: "For students", steps: howItWorks.students, cta: { href: "/courses", label: "Browse courses" } },
+            { heading: "For teachers", steps: howItWorks.teachers, cta: { href: "/teacher/apply", label: "Apply to teach" } },
+          ].map((side, i) => (
+            <motion.div
+              key={side.heading}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: i * 0.1 }}
+              className="flex flex-col rounded-xl border border-border bg-surface p-6 md:p-8"
+            >
+              <h3 className="mb-5 text-xl font-bold text-foreground">{side.heading}</h3>
+              <ol className="space-y-4">
+                {side.steps.map((step, n) => (
+                  <li key={step.title} className="flex gap-4">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                      {n + 1}
+                    </span>
+                    <div>
+                      <p className="font-semibold text-foreground">{step.title}</p>
+                      <p className="text-sm text-muted-foreground">{step.text}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+              <Link
+                href={side.cta.href}
+                className="mt-6 inline-flex items-center gap-1.5 self-start text-sm font-semibold text-primary hover:underline underline-offset-4"
+              >
+                {side.cta.label} <ArrowRight size={16} />
+              </Link>
+            </motion.div>
+          ))}
+        </div>
+      </section>
+
       {/* Founders */}
       <section className="container-custom mt-16 md:mt-24">
         <div className="mb-8 md:mb-10 text-center">
           <p className="mb-2 text-xs font-bold uppercase tracking-widest text-primary">The people behind Root Over</p>
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-foreground">Founders</h2>
         </div>
-        <div className="mx-auto grid max-w-xl grid-cols-1 sm:grid-cols-2 gap-6">
+        <div className="mx-auto grid max-w-3xl grid-cols-1 sm:grid-cols-2 gap-6 md:gap-8">
           {founders.map((founder, i) => (
             <motion.figure
               key={founder.name}
@@ -214,9 +260,9 @@ export default function AboutPage() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: i * 0.1 }}
-              className="group flex flex-col items-center rounded-2xl border border-border bg-surface p-6"
+              className="group overflow-hidden rounded-2xl border border-border bg-surface"
             >
-              <div className="h-32 w-32 overflow-hidden rounded-full bg-card ring-4 ring-background shadow-md">
+              <div className="aspect-[4/3] overflow-hidden bg-card">
                 <img
                   src={founder.photo}
                   alt={founder.name}
@@ -224,9 +270,12 @@ export default function AboutPage() {
                   className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
                 />
               </div>
-              <figcaption className="mt-4 text-center">
+              <figcaption className="p-5 text-center">
                 <p className="text-lg font-bold text-foreground">{founder.name}</p>
-                <p className="mt-0.5 text-sm font-medium text-primary">{founder.role}</p>
+                <p className="mt-0.5 flex items-center justify-center gap-1.5 text-sm font-medium text-primary">
+                  <img src="/rootover-faviocn.png" alt="" className="h-4 w-4" />
+                  {founder.role}
+                </p>
                 <a
                   href={founder.portfolio}
                   target="_blank"
