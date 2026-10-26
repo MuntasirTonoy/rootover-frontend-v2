@@ -54,8 +54,8 @@ This is Next.js **16.4** with React 19.3, and APIs differ from older versions. B
 
 ### Roles and routes
 
-- **Public**: `/`, `/courses`, `/courses/[courseId]`, `/teachers`, `/teachers/[teacherId]`, `/free-trial`, `/about`, `/login` (one-click demo logins against the backend's seeded accounts), `/register` (form, then the emailed code; `/register?verify=<email>` opens the code step, used when an unverified account logs in), `/learn/[courseId]?lesson=` (player; preview lessons are open to anyone).
-- **Student** (`src/app/(student)/`): `/dashboard`, `/my-classes`, `/saved-videos`, `/purchase-history` are student-only; `/profile` is shared by every role and renders inside that role's sidebar. Only students can buy courses (`/checkout` is student-only; the API rejects other roles).
+- **Public**: `/`, `/courses`, `/courses/[courseId]`, `/teachers`, `/teachers/[teacherId]`, `/free-trial`, `/about`, `/login` (one-click demo logins against the backend's seeded accounts), `/register` (form, then the emailed code; `/register?verify=<email>` opens the code step, used when an unverified account logs in), `/forgot-password` (email → `POST /auth/forgot-password`, then code + new password → `/auth/reset-password`, which signs out every session and sends the user to `/login`; `?email=` pre-fills it from the login form), `/learn/[courseId]?lesson=` (player; preview lessons are open to anyone).
+- **Student** (`src/app/(student)/`): `/dashboard`, `/my-classes`, `/saved-videos`, `/video-reports` (the student's own reports from `GET /me/video-reports`, with status and history), `/purchase-history` are student-only; `/profile` is shared by every role and renders inside that role's sidebar. Only students can buy courses (`/checkout` is student-only; the API rejects other roles).
 - **Teacher** (`src/app/teacher/`): `/teacher/apply` is open to any signed-in user; every other teacher route requires the teacher role (gated in `teacher/layout.tsx`, which also loads `/teacher/me` for `useTeacher()`).
 - **Admin** (`src/app/admin/`): admin-only.
 

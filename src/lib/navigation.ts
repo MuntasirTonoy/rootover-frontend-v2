@@ -25,6 +25,7 @@ export const studentNav: NavItem[] = [
   { label: "Overview", href: "/dashboard", icon: LayoutDashboard, exact: true },
   { label: "My Classes", href: "/my-classes", icon: Library },
   { label: "Saved Videos", href: "/saved-videos", icon: Bookmark },
+  { label: "Video Reports", href: "/video-reports", icon: Flag },
   { label: "Purchase History", href: "/purchase-history", icon: Receipt },
 ];
 

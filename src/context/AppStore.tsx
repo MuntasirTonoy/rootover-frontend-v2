@@ -58,6 +58,10 @@ interface AppContextValue {
   register: (input: { name: string; email: string; password: string }) => Promise<Registration>;
   verifyEmail: (email: string, code: string) => Promise<User>;
   resendVerification: (email: string) => Promise<Registration>;
+  // Emails a reset code (always the same answer, whether the account exists or not)
+  forgotPassword: (email: string) => Promise<Omit<Registration, "email">>;
+  // Signs out every session of that account; the user logs in again afterwards
+  resetPassword: (input: { email: string; code: string; password: string }) => Promise<{ message: string }>;
   logout: () => void;
   updateUser: (patch: ProfilePatch) => Promise<User>;
   // Reloads the account (e.g. after an admin changed the role)
@@ -152,6 +156,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const resendVerification = (email: string) =>
     api<Registration>("/auth/resend-verification", { method: "POST", body: { email } });
 
+  const forgotPassword = (email: string) =>
+    api<Omit<Registration, "email">>("/auth/forgot-password", { method: "POST", body: { email } });
+
+  const resetPassword = (input: { email: string; code: string; password: string }) =>
+    api<{ message: string }>("/auth/reset-password", { method: "POST", body: input });
+
   // Tokens are stateless, so the server call is a courtesy; the local session ends at once
   const logout = useCallback(() => {
     if (getToken()) void api("/auth/logout", { method: "POST" }).catch(() => undefined);
@@ -180,6 +190,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         register,
         verifyEmail,
         resendVerification,
+        forgotPassword,
+        resetPassword,
         logout,
         updateUser,
         refreshUser: loadSession,

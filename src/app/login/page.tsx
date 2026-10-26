@@ -115,9 +115,17 @@ function LoginForm() {
               </div>
             </div>
             <div>
-              <label htmlFor="password" className="block text-sm font-semibold mb-1.5">
-                Password
-              </label>
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <label htmlFor="password" className="block text-sm font-semibold">
+                  Password
+                </label>
+                <Link
+                  href={`/forgot-password${email.trim() ? `?email=${encodeURIComponent(email.trim())}` : ""}`}
+                  className="text-sm font-semibold text-primary hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <div className="relative">
                 <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input
