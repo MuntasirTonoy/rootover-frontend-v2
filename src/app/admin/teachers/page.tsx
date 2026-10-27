@@ -10,7 +10,7 @@ import DataTable from "@/components/ui/DataTable";
 import { Avatar, FilterSelect, PageHeader, SearchInput, StatusBadge } from "@/components/ui/primitives";
 import { withQuery } from "@/lib/api";
 import type { AdminTeacherRow, Paginated } from "@/lib/api-types";
-import { formatBDT, formatDate } from "@/lib/format";
+import { formatBDT } from "@/lib/format";
 import { btn } from "@/lib/ui";
 import { useApi, useDebounced } from "@/lib/use-api";
 
@@ -64,10 +64,9 @@ export default function AdminTeachersPage() {
               ),
             },
             { header: "Courses", cell: (t) => `${t.liveCourses} live / ${t.totalCourses}` },
-            { header: "Gross sales", cell: (t) => formatBDT(t.gross) },
-            { header: "Net earnings", cell: (t) => formatBDT(t.net) },
+            // Everything their courses sold for, before the platform commission
+            { header: "Earnings", cell: (t) => formatBDT(t.gross) },
             { header: "Withdrawable", cell: (t) => formatBDT(t.withdrawable) },
-            { header: "Joined", cell: (t) => <span className="whitespace-nowrap">{formatDate(t.joinedAt)}</span> },
             { header: "Status", cell: (t) => <StatusBadge status={t.status} /> },
             {
               header: "Actions",
