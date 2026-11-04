@@ -70,7 +70,6 @@ function validateInfo(c: Course): Errors {
   if (c.title.trim().length < 5) e.title = "Give the course a title of at least 5 characters.";
   if (!c.subject.trim()) e.subject = "Enter the subject, e.g. Physics.";
   if (c.description.trim().length < 20) e.description = "Describe the course in at least 20 characters.";
-  if (!c.outcomes.some((o) => o.trim())) e.outcomes = "Add at least one learning outcome.";
   if (!Number.isFinite(c.price) || c.price < 100) e.price = "The price must be at least ৳100.";
   if (c.discountPrice !== undefined && (c.discountPrice <= 0 || c.discountPrice >= c.price))
     e.discountPrice = "The discount price must be lower than the regular price.";
@@ -324,7 +323,7 @@ export default function CourseWizard({ initial, teacher, isNew }: CourseWizardPr
           </Field>
 
           <div>
-            <span className="block text-sm font-semibold mb-1.5">Learning outcomes</span>
+            <span className="block text-sm font-semibold mb-1.5">Learning outcomes <span className="font-normal text-muted-foreground">(optional)</span></span>
             <div className="space-y-2">
               {course.outcomes.map((o, i) => (
                 <div key={i} className="flex gap-2">
@@ -338,7 +337,6 @@ export default function CourseWizard({ initial, teacher, isNew }: CourseWizardPr
                   <button
                     type="button"
                     onClick={() => update({ outcomes: course.outcomes.filter((_, j) => j !== i) })}
-                    disabled={course.outcomes.length === 1}
                     className={btn.ghost}
                     aria-label={`Remove outcome ${i + 1}`}
                   >

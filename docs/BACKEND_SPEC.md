@@ -861,7 +861,7 @@ Only `title` (trimmed length ≥ 5) is required to save a draft.
 | `title` | trimmed length ≥ 5 | `Give the course a title of at least 5 characters.` |
 | `subject` | non-empty | `Enter the subject, e.g. Physics.` |
 | `description` | trimmed length ≥ 20 | `Describe the course in at least 20 characters.` |
-| `outcomes` | ≥ 1 non-empty string (empty strings removed) | `Add at least one learning outcome.` |
+| `outcomes` | optional; empty strings removed | — |
 | `price` | integer ≥ 100 | `The price must be at least ৳100.` |
 | `discountPrice` | optional; if set, integer > 0 and < `price` | `The discount price must be lower than the regular price.` |
 | `chapters` | ≥ 1 | `Add at least one chapter.` |
