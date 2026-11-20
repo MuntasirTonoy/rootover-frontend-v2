@@ -31,9 +31,6 @@ export default function CourseCard({ course }: { course: CourseSummary }) {
           <Badge tone="primary">{course.level}</Badge>
           <span className="hidden sm:inline text-xs text-muted-foreground truncate">{course.subject}</span>
         </div>
-        <h3 className="text-[13px] sm:text-base font-bold leading-snug text-card-foreground group-hover:text-primary transition-colors line-clamp-2">
-          {course.title}
-        </h3>
         <p className="mt-0.5 sm:mt-1 text-[11px] sm:text-sm text-muted-foreground truncate">
           {course.teacher.name}
         </p>

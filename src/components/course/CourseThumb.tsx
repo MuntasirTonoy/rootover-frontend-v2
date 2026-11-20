@@ -35,7 +35,7 @@ export default function CourseThumb({
           {course.level}
         </span>
         <span className="text-sm sm:text-xl font-extrabold leading-tight line-clamp-2">
-          {course.subject || "New course"}
+          {course.title|| "New course"}
         </span>
       </div>
     </div>
