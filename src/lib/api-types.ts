@@ -234,6 +234,23 @@ export interface CouponPublic {
   value: number;
 }
 
+// POST /checkout/cart/quote: each course priced by the API. `error` = can't be
+// bought (owned, unavailable); `couponError` = the coupon was refused (priced without it).
+export interface CartQuoteItem {
+  courseId: string;
+  course?: { id: string; title: string; level: Level; subject: string; thumbnail?: string; teacher: { name: string } };
+  quote?: Quote;
+  coupon?: CouponPublic | null;
+  error?: string;
+  couponError?: string;
+}
+
+export interface CartQuote {
+  items: CartQuoteItem[];
+  // What the courses without an error cost together
+  total: number;
+}
+
 export interface StudentDashboard {
   stats: { enrolled: number; lessonsCompleted: number; lessonsTotal: number; overallPercent: number; saved: number };
   continueLearning: EnrolledCourse[];
@@ -475,6 +492,9 @@ export interface PaymentView {
   payerNumber?: string;
   failureReason?: string;
   course?: { id: string; title: string };
+  // Every course of a course payment (several for a cart). granted = added to
+  // My Classes; refundNote = paid but already owned by then
+  items: { course: { id: string; title: string }; amount: number; granted: boolean; refundNote?: string }[];
   applicationId?: string;
   purchase?: Purchase;
   enrollment?: Enrollment;

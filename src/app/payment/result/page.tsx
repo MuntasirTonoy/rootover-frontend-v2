@@ -8,6 +8,7 @@ import AuthGuard from "@/components/AuthGuard";
 import LoadingAnimation from "@/components/LoadingAnimation";
 import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import type { PaymentView } from "@/lib/api-types";
+import { cart } from "@/lib/cart";
 import { formatBDT, formatDateTime } from "@/lib/format";
 import { btn } from "@/lib/ui";
 import { useApi } from "@/lib/use-api";
@@ -46,6 +47,12 @@ function PaymentResult() {
     return () => clearTimeout(t);
   }, [pending, reload, payment.data]);
 
+  // Paid courses leave the cart (including any already owned, which can't be bought again)
+  const paid = payment.data?.state === "completed" ? payment.data.items : null;
+  useEffect(() => {
+    if (paid?.length) cart.remove(paid.map((i) => i.course.id));
+  }, [paid]);
+
   if (!id)
     return (
       <Outcome icon="failed" title="Payment not found" text="We couldn't find this payment. If money was taken, contact support.">
@@ -58,12 +65,22 @@ function PaymentResult() {
 
   const p = payment.data;
   const isCourse = p.purpose === "course_purchase";
-  const what = isCourse ? (p.course?.title ?? "your course") : "the teacher registration fee";
+  const items = p.items ?? [];
+  const isCart = items.length > 1;
+  const granted = items.filter((i) => i.granted);
+  const what = isCourse
+    ? isCart
+      ? `${items.length} courses`
+      : (items[0]?.course.title ?? p.course?.title ?? "your course")
+    : "the teacher registration fee";
   const via = p.provider === "simulated" ? "simulated payment" : p.sandbox ? "bKash sandbox" : "bKash";
 
   if (p.state === "completed") {
+    const added =
+      granted.length > 1 ? `${granted.length} courses have been added to My Classes.` : `${granted[0]?.course.title ?? what} has been added to My Classes.`;
     return (
-      <Outcome icon="completed" title="Payment successful!" text={isCourse ? `${what} has been added to My Classes.` : "Your teacher account is approved. Your teacher tools are now unlocked."}>
+      <Outcome icon="completed" title="Payment successful!" text={isCourse ? added : "Your teacher account is approved. Your teacher tools are now unlocked."}>
+        {isCart && <PaymentItems items={items} />}
         <p className="mb-6 text-sm text-muted-foreground">
           Paid {formatBDT(p.amount)} via {via}
           {p.trxId && (
@@ -73,12 +90,14 @@ function PaymentResult() {
           )}{" "}
           · {formatDateTime(p.updatedAt)}
         </p>
-        {isCourse && p.course ? (
+        {isCourse && granted.length > 0 ? (
           <>
-            <Link href={`/learn/${p.course.id}`} className={btn.primary}>
-              Start learning
-            </Link>
-            <Link href="/my-classes" className={btn.secondary}>
+            {granted.length === 1 && (
+              <Link href={`/learn/${granted[0].course.id}`} className={btn.primary}>
+                Start learning
+              </Link>
+            )}
+            <Link href="/my-classes" className={granted.length === 1 ? btn.secondary : btn.primary}>
               Go to My Classes
             </Link>
           </>
@@ -104,7 +123,8 @@ function PaymentResult() {
       />
     );
 
-  const retry = isCourse && p.course ? `/checkout?courseId=${p.course.id}` : "/teacher/apply";
+  // A cart is retried from the cart (its courses are still in it)
+  const retry = isCart ? "/cart" : isCourse && p.course ? `/checkout?courseId=${p.course.id}` : "/teacher/apply";
   return (
     <Outcome
       icon="failed"
@@ -120,6 +140,23 @@ function PaymentResult() {
         Try again
       </Link>
     </Outcome>
+  );
+}
+
+// The courses of a cart payment, with any refund note
+function PaymentItems({ items }: { items: PaymentView["items"] }) {
+  return (
+    <ul className="mb-6 w-full divide-y divide-border rounded-lg border border-border bg-card text-left text-sm">
+      {items.map((i) => (
+        <li key={i.course.id} className="flex items-start justify-between gap-3 px-4 py-3">
+          <div className="min-w-0">
+            <p className="font-semibold text-foreground">{i.course.title}</p>
+            {i.refundNote && <p className="text-xs font-medium text-amber-700 dark:text-amber-400">{i.refundNote} Contact support.</p>}
+          </div>
+          <span className="shrink-0 text-muted-foreground">{formatBDT(i.amount)}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

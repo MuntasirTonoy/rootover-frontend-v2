@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { BookOpen, SearchX } from "lucide-react";
 import CourseCard from "@/components/CourseCard";
+import { useCanBuy } from "@/components/cart/CartButtons";
 import LoadingAnimation from "@/components/LoadingAnimation";
 import Pagination from "@/components/dashboard/Pagination";
 import ApiStatus, { ready } from "@/components/ui/ApiStatus";
@@ -49,6 +50,8 @@ function Catalog() {
   const params = useSearchParams();
   // Courses the signed-in user already bought get a "Purchased" badge
   const owned = useOwnedCourseIds();
+  // Guests and students get an add-to-cart button on courses they don't own
+  const canBuy = useCanBuy();
   const [query, setQuery] = useState(params.get("q") ?? "");
   const [level, setLevel] = useState(params.get("level") ?? "");
   const [subject, setSubject] = useState("");
@@ -151,7 +154,7 @@ function Catalog() {
                 key={course.id}
                 course={course}
                 purchased={owned.has(course.id)}
-                learn={owned.has(course.id) ? { href: `/learn/${course.id}`, label: "Start learning" } : undefined}
+                cartButton={canBuy && !owned.has(course.id)}
               />
             ))}
           </div>

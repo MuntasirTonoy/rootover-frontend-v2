@@ -16,6 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
+import { CartNavLink } from "./cart/CartButtons";
 import { Avatar } from "./ui/primitives";
 import { useApp } from "@/context/AppStore";
 import { adminNav, studentMobileNav, teacherNav } from "@/lib/navigation";
@@ -120,6 +121,7 @@ export default function Navbar() {
           </div>
 
           <div className="hidden lg:flex items-center gap-4">
+            <CartNavLink />
             <ThemeToggle />
             {user ? (
               <div className="relative" ref={profileRef}>
@@ -182,6 +184,7 @@ export default function Navbar() {
           </div>
 
           <div className="lg:hidden flex items-center gap-3">
+            <CartNavLink />
             <ThemeToggle />
             <button
               onClick={() => setIsMobileMenuOpen(true)}

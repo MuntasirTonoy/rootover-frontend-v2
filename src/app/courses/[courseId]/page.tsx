@@ -3,6 +3,7 @@
 import { Suspense, use } from "react";
 import Link from "next/link";
 import { BookOpen, CheckCircle2, Clock, Eye, Layers, Pencil, PlayCircle, Users } from "lucide-react";
+import { AddToCartButton } from "@/components/cart/CartButtons";
 import CourseThumb from "@/components/course/CourseThumb";
 import CurriculumList from "@/components/course/CurriculumList";
 import RateCourseForm from "@/components/course/RateCourseForm";
@@ -153,9 +154,12 @@ function CourseDetails({ params }: CoursePageProps) {
                         Only student accounts can buy courses.
                       </p>
                     ) : published ? (
-                      <Link href={`/checkout?courseId=${course.id}`} className={`${btn.primary} w-full py-3`}>
-                        Enroll now
-                      </Link>
+                      <>
+                        <Link href={`/checkout?courseId=${course.id}`} className={`${btn.primary} w-full py-3`}>
+                          Enroll now
+                        </Link>
+                        <AddToCartButton courseId={course.id} title={course.title} />
+                      </>
                     ) : (
                       <button disabled className={`${btn.primary} w-full py-3`}>
                         Not available yet
@@ -167,7 +171,7 @@ function CourseDetails({ params }: CoursePageProps) {
                       </Link>
                     )}
                     <p className="text-xs text-muted-foreground text-center">
-                      One payment for the full course. Coupons can be applied at checkout.
+                      One payment for the full course. Buying several? Add them to your cart and pay once.
                     </p>
                   </>
                 )}
