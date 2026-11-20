@@ -30,10 +30,7 @@ export default function CourseThumb({
       className={`relative ${aspect} w-full overflow-hidden ${bg} text-white ${className}`}
     >
       <Icon className="absolute -right-3 -bottom-3 w-16 h-16 sm:-right-4 sm:-bottom-4 sm:w-28 sm:h-28 opacity-15" strokeWidth={1.5} />
-      <div className="absolute inset-0 p-2.5 sm:p-4 flex flex-col justify-between">
-        <span className="self-start rounded bg-white/20 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-[11px] font-bold tracking-wide">
-          {course.level}
-        </span>
+      <div className="absolute inset-0 p-2.5 sm:p-4 flex flex-col justify-end">
         <span className="text-sm sm:text-xl font-extrabold leading-tight line-clamp-2">
           {course.title|| "New course"}
         </span>

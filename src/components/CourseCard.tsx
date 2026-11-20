@@ -35,17 +35,13 @@ export default function CourseCard({ course }: { course: CourseSummary }) {
           {course.teacher.name}
         </p>
 
-        {/* Compact rating on phones, full stars from sm up */}
-        <p className="sm:hidden mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
-          {rating.count ? (
-            <>
-              <Star size={11} className="fill-amber-400 text-amber-400" />
-              <b className="text-amber-500">{rating.average.toFixed(1)}</b>({rating.count})
-            </>
-          ) : (
-            "New"
-          )}
-        </p>
+        {/* Compact rating on phones (only once rated), full stars from sm up */}
+        {rating.count > 0 && (
+          <p className="sm:hidden mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Star size={11} className="fill-amber-400 text-amber-400" />
+            <b className="text-amber-500">{rating.average.toFixed(1)}</b>({rating.count})
+          </p>
+        )}
         <div className="hidden sm:block mt-2">
           <Stars rating={rating.average} count={rating.count} />
         </div>
