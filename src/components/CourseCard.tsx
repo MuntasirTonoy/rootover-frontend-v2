@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpen, Star, Users } from "lucide-react";
+import { BookOpen, CheckCircle2, Star, Users } from "lucide-react";
 import CourseThumb from "@/components/course/CourseThumb";
 import { Badge, Stars } from "@/components/ui/primitives";
 import { formatBDT } from "@/lib/format";
@@ -9,7 +9,8 @@ import type { CourseSummary } from "@/lib/api-types";
 
 // Phones show these two per row, so below `sm` the card switches to a compact
 // layout: taller thumbnail, short rating, no stats row, price pinned to the bottom.
-export default function CourseCard({ course }: { course: CourseSummary }) {
+// purchased: the signed-in user owns this course (lib/use-owned-courses.ts)
+export default function CourseCard({ course, purchased = false }: { course: CourseSummary; purchased?: boolean }) {
   const { rating, effectivePrice: price, discountPercent: off } = course;
 
   return (
@@ -19,6 +20,11 @@ export default function CourseCard({ course }: { course: CourseSummary }) {
     >
       <div className="relative">
         <CourseThumb course={course} tallOnMobile />
+        {purchased && (
+          <span className="absolute left-1.5 top-1.5 sm:left-2 sm:top-2 inline-flex items-center gap-1 rounded bg-green-600 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-[11px] font-bold text-white shadow-sm">
+            <CheckCircle2 size={12} /> Purchased
+          </span>
+        )}
         {off > 0 && (
           <span className="absolute right-1.5 top-1.5 sm:right-2 sm:top-2 rounded bg-red-600 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-[11px] font-bold text-white">
             {off}% OFF

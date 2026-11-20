@@ -11,6 +11,7 @@ import { EmptyBlock, FilterSelect, SearchInput } from "@/components/ui/primitive
 import { withQuery } from "@/lib/api";
 import type { CourseSummary, Facets, Paginated } from "@/lib/api-types";
 import { useApi, useDebounced } from "@/lib/use-api";
+import { useOwnedCourseIds } from "@/lib/use-owned-courses";
 import { LEVELS } from "@/lib/types";
 import { btn } from "@/lib/ui";
 
@@ -46,6 +47,8 @@ export default function CoursesPage() {
 
 function Catalog() {
   const params = useSearchParams();
+  // Courses the signed-in user already bought get a "Purchased" badge
+  const owned = useOwnedCourseIds();
   const [query, setQuery] = useState(params.get("q") ?? "");
   const [level, setLevel] = useState(params.get("level") ?? "");
   const [subject, setSubject] = useState("");
@@ -144,7 +147,7 @@ function Catalog() {
         <>
           <div className={`grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6 ${list.loading ? "opacity-60" : ""}`}>
             {results.map((course) => (
-              <CourseCard key={course.id} course={course} />
+              <CourseCard key={course.id} course={course} purchased={owned.has(course.id)} />
             ))}
           </div>
           <Pagination
