@@ -81,13 +81,14 @@ export default function MyClassesPage() {
             <FilterSelect label="Progress" value={status} onChange={setStatus} options={statusOptions} />
           </div>
 
-          {/* Teachers side by side: round photo with the name under it; picking one filters the courses */}
-          <div className="mb-6 flex gap-4 sm:gap-6 overflow-x-auto pb-2" role="group" aria-label="Filter by teacher">
+          {/* Teachers side by side: the round photo filters the courses, the name opens the
+              teacher's profile. The padding keeps the selection ring from being clipped by the scroller. */}
+          <div className="-mx-1 mb-6 flex items-start gap-3 sm:gap-5 overflow-x-auto px-1 pt-1 pb-3" aria-label="Teachers">
             <TeacherChip
               label="All"
               count={owned.length}
               active={!teacherId}
-              onClick={() => setTeacherId("")}
+              onSelect={() => setTeacherId("")}
               photo={
                 <span className="flex h-full w-full items-center justify-center rounded-full bg-primary/10 text-primary">
                   <Users size={24} />
@@ -98,22 +99,16 @@ export default function MyClassesPage() {
               <TeacherChip
                 key={t.id}
                 label={t.name}
+                href={`/teachers/${t.id}`}
                 count={countOf(t.id)}
                 active={teacherId === t.id}
-                onClick={() => setTeacherId(teacherId === t.id ? "" : t.id)}
+                onSelect={() => setTeacherId(teacherId === t.id ? "" : t.id)}
                 photo={<Avatar name={t.name} src={t.avatar} size="w-full h-full text-lg" />}
               />
             ))}
           </div>
 
-          {selected && (
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="font-bold text-foreground truncate">Courses by {selected.name}</h2>
-              <Link href={`/teachers/${selected.id}`} className={`${btn.small} shrink-0`}>
-                View profile
-              </Link>
-            </div>
-          )}
+          {selected && <h2 className="mb-4 font-bold text-foreground truncate">Courses by {selected.name}</h2>}
 
           {filtered.length === 0 ? (
             <EmptyBlock title="No courses match your filters" description="Try a different search or filter." />
@@ -138,38 +133,49 @@ export default function MyClassesPage() {
   );
 }
 
-// One teacher in the row: round photo, name under it, number of courses
+// One teacher in the row: round photo (filters the courses), the name under it
+// (a link to the teacher's profile when `href` is given), and the course count
 function TeacherChip({
   label,
+  href,
   count,
   active,
-  onClick,
+  onSelect,
   photo,
 }: {
   label: string;
+  href?: string;
   count: number;
   active: boolean;
-  onClick: () => void;
+  onSelect: () => void;
   photo: ReactNode;
 }) {
+  const nameClass = `block w-full truncate text-xs font-semibold leading-4 ${active ? "text-primary" : "text-foreground"}`;
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className="group flex w-20 shrink-0 flex-col items-center gap-1.5 text-center focus-visible:outline-none"
-    >
-      <span
-        className={`block h-16 w-16 overflow-hidden rounded-full ring-2 ring-offset-2 ring-offset-background transition-colors group-focus-visible:ring-primary ${
-          active ? "ring-primary" : "ring-transparent group-hover:ring-border"
+    <div className="flex w-20 shrink-0 flex-col items-center text-center">
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-pressed={active}
+        aria-label={href ? `Show courses by ${label}` : "Show all courses"}
+        className={`h-16 w-16 overflow-hidden rounded-full ring-2 ring-offset-2 ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-primary ${
+          active ? "ring-primary" : "ring-transparent hover:ring-border"
         }`}
       >
         {photo}
-      </span>
-      <span className={`w-full truncate text-xs font-semibold ${active ? "text-primary" : "text-foreground"}`}>{label}</span>
-      <span className="-mt-1 text-[10px] text-muted-foreground">
-        {count} {count === 1 ? "course" : "courses"}
-      </span>
-    </button>
+      </button>
+      <div className="mt-2 w-full">
+        {href ? (
+          <Link href={href} title={`${label}'s profile`} className={`${nameClass} hover:text-primary hover:underline`}>
+            {label}
+          </Link>
+        ) : (
+          <span className={nameClass}>{label}</span>
+        )}
+        <span className="mt-0.5 block text-[10px] leading-3 text-muted-foreground">
+          {count} {count === 1 ? "course" : "courses"}
+        </span>
+      </div>
+    </div>
   );
 }
