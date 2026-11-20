@@ -4,8 +4,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Google } from "@/components/BrandIcons";
-import { useApp } from "@/context/AppStore";
-import { errorMessage } from "@/lib/api";
+import { LOGIN_CANCELLED, useApp } from "@/context/AppStore";
+import { ApiError, errorMessage } from "@/lib/api";
 import type { User } from "@/lib/types";
 import { useConfig } from "@/lib/use-config";
 
@@ -79,7 +79,8 @@ export default function GoogleSignIn({
       try {
         onSignedIn(await loginWithGoogle(credential));
       } catch (err) {
-        toast.error(errorMessage(err));
+        // Closing the "Too many devices" dialog needs no message
+        if (!(err instanceof ApiError && err.code === LOGIN_CANCELLED)) toast.error(errorMessage(err));
         setBusy(false);
       }
     };

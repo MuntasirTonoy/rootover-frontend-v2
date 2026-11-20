@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import GoogleSignIn from "@/components/GoogleSignIn";
 import PasswordInput from "@/components/ui/PasswordInput";
-import { useApp } from "@/context/AppStore";
+import { LOGIN_CANCELLED, useApp } from "@/context/AppStore";
 import { ApiError, errorMessage } from "@/lib/api";
 import { DEMO_ACCOUNTS } from "@/lib/demo-accounts";
 import { useConfig } from "@/lib/use-config";
@@ -65,6 +65,8 @@ function LoginForm() {
     try {
       finish(await login(email, password), true);
     } catch (err) {
+      // Closed the "Too many devices" dialog
+      if (err instanceof ApiError && err.code === LOGIN_CANCELLED) return setLoading(false);
       // Accounts must confirm their sign-up code first
       if (err instanceof ApiError && err.code === "EMAIL_NOT_VERIFIED") {
         toast.info("Enter the code we emailed you to finish signing up.");
@@ -81,7 +83,7 @@ function LoginForm() {
     try {
       finish(await loginAs(role), false);
     } catch (err) {
-      toast.error(errorMessage(err));
+      if (!(err instanceof ApiError && err.code === LOGIN_CANCELLED)) toast.error(errorMessage(err));
       setDemoLoading(null);
     }
   };

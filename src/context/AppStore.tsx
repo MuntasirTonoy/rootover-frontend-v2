@@ -15,9 +15,10 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { DEMO_ACCOUNTS } from "@/lib/demo-accounts";
+import DeviceLimitDialog from "@/components/DeviceLimitDialog";
 import SuspendedDialog from "@/components/SuspendedDialog";
 import { api, ApiError, getToken, SESSION_EVENT, setToken, SUSPENDED_EVENT } from "@/lib/api";
-import type { ApiUser, Session } from "@/lib/api-types";
+import type { ApiUser, LoginDevice, Session } from "@/lib/api-types";
 import type { Role, TeacherApplication, User } from "@/lib/types";
 
 const TOKEN_KEY = "rootover_token";
@@ -72,6 +73,16 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
+// Thrown by login / loginWithGoogle when the user closes the "Too many devices"
+// dialog without choosing; callers just stop, without showing an error
+export const LOGIN_CANCELLED = "LOGIN_CANCELLED";
+
+interface DeviceChoice {
+  devices: LoginDevice[];
+  limit: number;
+  resolve: (deviceId: string | null) => void;
+}
+
 const fromApi = (u: ApiUser): User => ({ ...u });
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -79,6 +90,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
   // A suspended account was detected (on load or at login): show the dialog
   const [suspended, setSuspended] = useState(false);
+  // A student at the device limit is choosing which device to log out
+  const [deviceChoice, setDeviceChoice] = useState<DeviceChoice | null>(null);
 
   // Latest user for event handlers, synced before any of them can run
   const userRef = useRef(user);
@@ -141,16 +154,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return next;
   }, []);
 
-  const login = async (email: string, password: string) =>
-    startSession(await api<Session>("/auth/login", { method: "POST", body: { email, password } }));
+  // Sends a login. When the account is already on its maximum number of devices
+  // (409 DEVICE_LIMIT), asks which device to log out and sends it again with
+  // that device's id; closing the dialog throws LOGIN_CANCELLED.
+  const withDeviceChoice = async (send: (replaceSessionId?: string) => Promise<Session>) => {
+    let replaceSessionId: string | undefined;
+    for (;;) {
+      try {
+        return startSession(await send(replaceSessionId));
+      } catch (err) {
+        if (!(err instanceof ApiError && err.code === "DEVICE_LIMIT")) throw err;
+        const devices = (err.data.devices as LoginDevice[] | undefined) ?? [];
+        const limit = Number(err.data.limit) || devices.length;
+        const chosen = await new Promise<string | null>((resolve) => setDeviceChoice({ devices, limit, resolve }));
+        setDeviceChoice(null);
+        if (!chosen) throw new ApiError(0, LOGIN_CANCELLED, "Login cancelled.");
+        replaceSessionId = chosen;
+      }
+    }
+  };
+
+  const login = (email: string, password: string) =>
+    withDeviceChoice((replaceSessionId) =>
+      api<Session>("/auth/login", { method: "POST", body: { email, password, replaceSessionId } }),
+    );
 
   const loginAs = (role: Role) => {
     const account = DEMO_ACCOUNTS.find((a) => a.role === role)!;
     return login(account.email, account.password);
   };
 
-  const loginWithGoogle = async (credential: string) =>
-    startSession(await api<Session>("/auth/google", { method: "POST", body: { credential } }));
+  const loginWithGoogle = (credential: string) =>
+    withDeviceChoice((replaceSessionId) =>
+      api<Session>("/auth/google", { method: "POST", body: { credential, replaceSessionId } }),
+    );
 
   const register = (input: { name: string; email: string; password: string }) =>
     api<Registration>("/auth/register", { method: "POST", body: input });
@@ -167,7 +204,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const resetPassword = (input: { email: string; code: string; password: string }) =>
     api<{ message: string }>("/auth/reset-password", { method: "POST", body: input });
 
-  // Tokens are stateless, so the server call is a courtesy; the local session ends at once
+  // The server deletes this device's session (so the token stops working
+  // everywhere); the local session ends at once either way
   const logout = useCallback(() => {
     if (getToken()) void api("/auth/logout", { method: "POST" }).catch(() => undefined);
     setToken(null);
@@ -175,7 +213,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  // A password change answers with a fresh token (older ones are revoked)
+  // A password change logs out every other device and answers with a fresh token for this one
   const updateUser = async (patch: ProfilePatch) => {
     if (!userRef.current) throw new Error("Please log in first.");
     const res = await api<{ user: ApiUser; token?: string }>("/me", { method: "PATCH", body: patch });
@@ -205,6 +243,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     >
       {children}
       <SuspendedDialog open={suspended} onClose={() => setSuspended(false)} />
+      {deviceChoice && (
+        <DeviceLimitDialog
+          devices={deviceChoice.devices}
+          limit={deviceChoice.limit}
+          onChoose={(id) => deviceChoice.resolve(id)}
+          onCancel={() => deviceChoice.resolve(null)}
+        />
+      )}
     </AppContext.Provider>
   );
 }

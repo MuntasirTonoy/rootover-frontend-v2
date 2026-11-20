@@ -84,6 +84,25 @@ export interface Session {
   user: ApiUser;
 }
 
+// A signed-in device (GET /me/sessions, and the `devices` of a DEVICE_LIMIT error)
+export interface LoginDevice {
+  id: string;
+  browser: string;
+  os: string;
+  deviceType: "desktop" | "mobile" | "tablet";
+  ip: string | null;
+  createdAt: string;
+  lastSeenAt: string;
+  // The device making the request
+  current: boolean;
+}
+
+export interface DeviceList {
+  // Most devices the account may be logged in on at once; null = no limit (teachers, admins)
+  limit: number | null;
+  devices: LoginDevice[];
+}
+
 export interface Paginated<T> {
   data: T[];
   pagination: { page: number; limit: number; total: number; pages: number };
