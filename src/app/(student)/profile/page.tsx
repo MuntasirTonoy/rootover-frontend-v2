@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Camera, GraduationCap, Loader2, PlayCircle, Save, Upload, UserRound } from "lucide-react";
+import { Camera, ChevronRight, GraduationCap, Loader2, Save, Upload } from "lucide-react";
 import LoggedInDevices from "@/components/LoggedInDevices";
 import Modal from "@/components/ui/Modal";
 import { Avatar, Field, PageHeader } from "@/components/ui/primitives";
@@ -44,8 +44,8 @@ function ProfileForm({ user }: { user: User }) {
   // The presets come from the API, which only accepts a preset or the user's own upload
   const presets = useConfig()?.avatarPresets ?? [];
 
-  // Only students have purchased courses
-  const owned = useApi<EnrolledCourse[]>(user.role === "student" ? "/me/enrollments" : null).data ?? [];
+  // Number of purchased courses (only students buy courses); undefined while loading
+  const owned = useApi<EnrolledCourse[]>(user.role === "student" ? "/me/enrollments" : null).data?.length;
   const set = (key: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
 
@@ -123,47 +123,23 @@ function ProfileForm({ user }: { user: User }) {
               <h2 className="font-bold text-foreground truncate">{user.name}</h2>
               <p className="text-xs text-muted-foreground break-all">{user.email}</p>
               <p className="mt-1 text-[11px] font-bold uppercase tracking-wider text-primary">{user.role}</p>
+              {/* Just the total; the courses themselves are on My Classes */}
+              {user.role === "student" && (
+                <Link
+                  href="/my-classes"
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold text-foreground hover:border-primary/50 hover:text-primary"
+                >
+                  <GraduationCap size={14} className="text-primary" />
+                  {owned === undefined ? "…" : owned} purchased {owned === 1 ? "course" : "courses"}
+                  <ChevronRight size={14} />
+                </Link>
+              )}
             </div>
           </div>
 
-          {user.role === "student" && (
-          <div className="md:col-start-1 md:row-start-2 rounded-lg border border-border bg-surface p-4 md:p-5">
-            <h3 className="mb-4 flex items-center gap-2 font-bold text-foreground">
-              <GraduationCap size={18} className="text-primary" /> Purchased Courses
-              <span className="ml-auto text-xs font-medium text-muted-foreground">{owned.length}</span>
-            </h3>
-            {owned.length ? (
-              <div className="space-y-3">
-                {owned.map(({ course, progress, resumeLessonId }) => (
-                  <Link
-                    key={course.id}
-                    href={`/learn/${course.id}${resumeLessonId ? `?lesson=${resumeLessonId}` : ""}`}
-                    className="block rounded-md border border-border bg-background p-3 hover:border-primary/50 group"
-                  >
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-primary">
-                      {course.level} · {course.subject}
-                    </p>
-                    <h4 className="text-sm font-bold text-foreground group-hover:text-primary">{course.title}</h4>
-                    <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                      <UserRound size={14} className="shrink-0" />
-                      <span className="truncate font-semibold text-foreground">{course.teacher.name}</span>
-                    </p>
-                    <p className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
-                      <PlayCircle size={12} /> {progress.completed}/{progress.total} lessons · {progress.percent}%
-                    </p>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                No purchased courses yet.{" "}
-                <Link href="/courses" className="font-bold text-primary hover:underline">
-                  Browse courses
-                </Link>
-              </p>
-            )}
+          <div className="md:col-start-1 md:row-start-2">
+            <LoggedInDevices />
           </div>
-          )}
 
         <form
           onSubmit={handleSubmit}
@@ -249,8 +225,6 @@ function ProfileForm({ user }: { user: User }) {
           </div>
         </form>
       </div>
-
-      <LoggedInDevices />
 
       <Modal
         open={avatarOpen}

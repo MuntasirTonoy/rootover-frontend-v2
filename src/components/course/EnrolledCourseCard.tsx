@@ -31,14 +31,17 @@ export default function EnrolledCourseCard({
     <div className="flex h-full flex-col overflow-hidden rounded-xl sm:rounded-lg border border-border bg-card">
       <Link href={`/courses/${course.id}`} className="relative block">
         <CourseThumb course={course} tallOnMobile />
-        <span
-          className={`absolute left-1.5 bottom-1.5 sm:left-2 sm:bottom-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] sm:text-[11px] font-bold text-white ${
-            done ? "bg-green-600" : "bg-black/60 backdrop-blur-sm"
-          }`}
-        >
-          {done && <CheckCircle2 size={11} />}
-          {done ? "Completed" : started ? `${progress.percent}% done` : "New"}
-        </span>
+        {/* Progress pill; a course not started yet shows none */}
+        {started && (
+          <span
+            className={`absolute left-1.5 bottom-1.5 sm:left-2 sm:bottom-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] sm:text-[11px] font-bold text-white ${
+              done ? "bg-green-600" : "bg-black/60 backdrop-blur-sm"
+            }`}
+          >
+            {done && <CheckCircle2 size={11} />}
+            {done ? "Completed" : `${progress.percent}% done`}
+          </span>
+        )}
       </Link>
 
       <div className="flex flex-1 flex-col p-2.5 sm:p-4">

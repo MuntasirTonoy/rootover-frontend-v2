@@ -70,39 +70,28 @@ export default function LoggedInDevices() {
   };
 
   return (
-    <section className="mt-4 md:mt-6 rounded-lg border border-border bg-card p-4 md:p-6">
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h3 className="flex items-center gap-2 font-bold text-foreground">
-            <MonitorSmartphone size={18} className="text-primary" /> Logged-in devices
-          </h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {ready(state) && state.data.limit
-              ? `Your account can be logged in on up to ${state.data.limit} devices at a time. Log out any device you don't recognise.`
-              : "Devices where your account is logged in. Log out any device you don't recognise."}
-          </p>
-        </div>
-        <button
-          onClick={logOutAll}
-          disabled={!ready(state) || busy !== null}
-          className={`${btn.danger} w-full shrink-0 sm:w-auto`}
-        >
-          {busy === "all" ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />}
-          Log out from all devices
-        </button>
-      </div>
+    // Sits in the profile's narrow left column, so everything stacks
+    <section className="rounded-lg border border-border bg-card p-4 md:p-5">
+      <h3 className="flex items-center gap-2 font-bold text-foreground">
+        <MonitorSmartphone size={18} className="text-primary" /> Logged-in devices
+      </h3>
+      <p className="mt-1 mb-4 text-xs text-muted-foreground">
+        {ready(state) && state.data.limit
+          ? `Your account can be logged in on up to ${state.data.limit} devices at a time. Log out any device you don't recognise.`
+          : "Devices where your account is logged in. Log out any device you don't recognise."}
+      </p>
 
       {!ready(state) ? (
         <ApiStatus state={state} className="min-h-32" />
       ) : (
         <ul className="divide-y divide-border rounded-md border border-border">
           {state.data.devices.map((device) => (
-            <li key={device.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
+            <li key={device.id} className="flex flex-col gap-2 p-3">
               <DeviceSummary device={device} />
               <button
                 onClick={() => logOutDevice(device)}
                 disabled={busy !== null}
-                className={`${btn.small} self-start sm:self-auto`}
+                className={`${btn.small} ml-13 self-start`}
               >
                 {busy === device.id ? <Loader2 size={14} className="animate-spin" /> : <LogOut size={14} />}
                 Log out
@@ -111,6 +100,15 @@ export default function LoggedInDevices() {
           ))}
         </ul>
       )}
+
+      <button
+        onClick={logOutAll}
+        disabled={!ready(state) || busy !== null}
+        className={`${btn.danger} mt-4 w-full`}
+      >
+        {busy === "all" ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />}
+        Log out from all devices
+      </button>
     </section>
   );
 }
