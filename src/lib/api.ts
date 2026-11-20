@@ -15,13 +15,22 @@ export class ApiError extends Error {
   status: number;
   code: string;
   fields?: Record<string, string>;
+  // The whole `error` object, for codes that carry more (DEVICE_LIMIT: `devices`, `limit`)
+  data: Record<string, unknown>;
 
-  constructor(status: number, code: string, message: string, fields?: Record<string, string>) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    fields?: Record<string, string>,
+    data: Record<string, unknown> = {},
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
     this.fields = fields;
+    this.data = data;
   }
 }
 
@@ -86,6 +95,7 @@ export async function api<T>(
     error.code ?? "INTERNAL",
     error.message ?? "Something went wrong. Please try again.",
     error.fields,
+    error,
   );
   const banned = res.status === 403 && failure.message === BANNED_MESSAGE;
   if (banned) window.dispatchEvent(new CustomEvent(SUSPENDED_EVENT));

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Camera, GraduationCap, Loader2, PlayCircle, Save, Upload, UserRound } from "lucide-react";
+import LoggedInDevices from "@/components/LoggedInDevices";
 import Modal from "@/components/ui/Modal";
 import { Avatar, Field, PageHeader } from "@/components/ui/primitives";
 import { useApp } from "@/context/AppStore";
@@ -248,6 +249,8 @@ function ProfileForm({ user }: { user: User }) {
           </div>
         </form>
       </div>
+
+      <LoggedInDevices />
 
       <Modal
         open={avatarOpen}
