@@ -103,7 +103,7 @@ export default function MyClassesPage() {
                   </div>
                   <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-5">
                     {items.map((item) => (
-                      <EnrolledCourseCard key={item.course.id} item={item} />
+                      <EnrolledCourseCard key={item.course.id} item={item} canRate={false} />
                     ))}
                   </div>
                 </section>
