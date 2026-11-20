@@ -147,7 +147,12 @@ function Catalog() {
         <>
           <div className={`grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6 ${list.loading ? "opacity-60" : ""}`}>
             {results.map((course) => (
-              <CourseCard key={course.id} course={course} purchased={owned.has(course.id)} />
+              <CourseCard
+                key={course.id}
+                course={course}
+                purchased={owned.has(course.id)}
+                learn={owned.has(course.id) ? { href: `/learn/${course.id}`, label: "Start learning" } : undefined}
+              />
             ))}
           </div>
           <Pagination

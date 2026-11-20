@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Library } from "lucide-react";
-import EnrolledCourseCard from "@/components/course/EnrolledCourseCard";
+import CourseCard from "@/components/CourseCard";
 import ApiStatus, { ready } from "@/components/ui/ApiStatus";
 import { Avatar, EmptyBlock, FilterSelect, PageHeader, SearchInput } from "@/components/ui/primitives";
 import type { EnrolledCourse } from "@/lib/api-types";
@@ -103,7 +103,14 @@ export default function MyClassesPage() {
                   </div>
                   <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-5">
                     {items.map((item) => (
-                      <EnrolledCourseCard key={item.course.id} item={item} canRate={false} />
+                      <CourseCard
+                        key={item.course.id}
+                        course={item.course}
+                        learn={{
+                          href: `/learn/${item.course.id}${item.resumeLessonId ? `?lesson=${item.resumeLessonId}` : ""}`,
+                          label: "Start learning",
+                        }}
+                      />
                     ))}
                   </div>
                 </section>
